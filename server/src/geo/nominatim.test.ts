@@ -48,14 +48,14 @@ describe("localityBBox", () => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json(rows)));
     await expect(localityBBox(kv, locality)).resolves.toBeNull();
   });
-  it.each([{ error: "private server detail" }, [{ ...reply[0], boundingbox: ["oops", "19", "72", "73"] }]])(
-    "rejects malformed Nominatim replies",
-    async (rows) => {
-      const { kv } = memoryCache();
-      vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json(rows)));
-      await expect(localityBBox(kv, locality)).rejects.toThrow("Map search unavailable");
-    },
-  );
+  it.each([
+    { rows: { error: "private server detail" } },
+    { rows: [{ ...reply[0], boundingbox: ["oops", "19", "72", "73"] }] },
+  ])("rejects malformed Nominatim replies", async ({ rows }) => {
+    const { kv } = memoryCache();
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json(rows)));
+    await expect(localityBBox(kv, locality)).rejects.toThrow("Map search unavailable");
+  });
   it("rejects HTTP failures without exposing the upstream body", async () => {
     const { kv, values } = memoryCache();
     vi.stubGlobal(

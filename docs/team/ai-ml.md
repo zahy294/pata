@@ -17,6 +17,7 @@ Until the owner's guard (P0-6) lands, every route returns 500, so unit-test your
 
 - [x] P0-4: DIGIPIN encode/decode, reusable vectors, 1,000 seeded round-trips and edge tests; `npm run check` passes. Result: `docs/plans/P0-4.md`.
 - [x] P0-7 geometry: shared distance, bearing, offset, segment snapping and pin-spread tests; `npm run check` passes. Result: `docs/plans/P0-7-geo.md`. Map search, AI and speech remain pending.
+- [ ] P0-7 map search: adapters and 26 tests implemented; real Dharavi boundary verified, live Overpass feature check blocked by upstream/network failures. Owner global-coordination integration remains open. Details: `docs/plans/P0-7-osm.md`.
 
 ---
 
