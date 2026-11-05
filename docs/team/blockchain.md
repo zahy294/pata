@@ -8,6 +8,8 @@ You're on the critical path: the first household name on Sepolia is due at **hou
 
 - [x] P0-5 keys and seal: device root and household state storage, deterministic household/grant identities with frozen vectors, AES-GCM-256 round trips and rejection tests. See `docs/plans/P0-5.md`.
 - [x] P0-5 RPC module: Nox clients, routing/logging tests and real localhost reads on both chains. See `docs/plans/P0-5-rpc.md`.
+- [x] P0-8 ENS module: pinned ABIs, roles, names, household deployments and locality update; verified on Sepolia. See `docs/plans/P0-8-ens.md`.
+- [ ] P0-8 ENS end-to-end: owner's `/register`, then verify `getEnsText` through universal resolution (user explicitly deferred registration).
 - [ ] P0-3 follow-up: repeat with an Arkiv access key on the OnePlus 11 preview; five funded Nox write measurements per chain (deferred by the user until device, preview and funds are ready).
 
 For testing on Sepolia and Rabdi you need your own development wallet (SETUP.md §3), funded from the faucets. Its key goes in your `.env.local` only; Codex must never read or print it. Household keys come from the app itself.

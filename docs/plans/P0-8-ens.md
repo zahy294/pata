@@ -12,4 +12,10 @@
 
 **Risks:** the owner's `/register` and browser registerName function are currently stubs owned by another role. Record that dependency rather than implementing someone else's service. Live testing needs a funded development wallet and parent registry; secret files must never be opened or printed. Owner scripts may consume environment variables at runtime, with plain errors and public addresses/receipts only. Do not claim end-to-end name resolution if registration is unavailable. Work and pushes stay on `blockchain`.
 
-**Result:** pending.
+**Result:** ENS implementation and live Sepolia deployment/update checks pass. ABI subsets match the pinned deployment artifacts; 57 unit tests and one Foundry test pass with app/server typechecking (18 unrelated TODO tests remain). No shared constants or types changed. The opt-in fork test verifies resolver initialization, both public locality records, the grant registry's un-emancipated state, and a later locality update. Public receipts and gas are in `P0-3.md`.
+
+The first immediate read verification failed; repeating read-only calls against those same deployed contracts returned both correct records and `isEmancipated=false`. RPC propagation lag is suspected, not proven. The live test now polls reads for at most 30 seconds after mined receipts; the complete rerun passed. Application behavior was unchanged by this test adjustment.
+
+**Pending, explicitly deferred by the user:** owner's `/register` and subsequent universal-resolution `getEnsText` check. Direct `resolve(bytes,bytes)` verification does not establish name registration or universal resolution. Do not mark the full end-to-end acceptance criterion complete yet.
+
+**Re-run live verification:** `node --env-file=.env.local node_modules/vitest/vitest.mjs run --config src/lib/ens/household.fork.config.mts`. Requires `DEPLOYER_PRIVATE_KEY` at runtime (never open or print `.env.local`); skips if missing. Every run funds a fresh throwaway household with 0.0001 Sepolia ETH, then sends two deployments and a locality update. Public-only results go to ignored `scripts/dev/ens-smoke-results.json`; throwaway keys are not persisted. The Node-only RPC adapter uses direct testnet transport, separate from the application's Nox clients. This is not a Nox write-latency measurement.
