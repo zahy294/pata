@@ -40,3 +40,7 @@ contracts/broadcast/*/31337/
 *.pem
 npm-debug.log*
 .vercel
+
+# Throwaway dev scripts that may hold test keys or real test addresses
+scripts/dev/
+scripts/data/
