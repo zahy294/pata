@@ -36,7 +36,12 @@ async function reservedContext(): Promise<RouteContext> {
 }
 
 /** Real viem ABI encoding/decoding against a fake HTTP JSON-RPC server. */
-function fakeRpc(status: number, registeredOwner: `0x${string}` = owner, failBroadcast = false) {
+function fakeRpc(
+  status: number,
+  registeredOwner: `0x${string}` = owner,
+  failBroadcast = false,
+  receiptStatus = "0x1",
+) {
   const calls: string[] = [];
   vi.stubGlobal(
     "fetch",
@@ -110,7 +115,7 @@ function fakeRpc(status: number, registeredOwner: `0x${string}` = owner, failBro
           contractAddress: null,
           logs: [],
           logsBloom: `0x${"00".repeat(256)}`,
-          status: "0x1",
+          status: receiptStatus,
           type: "0x2",
           effectiveGasPrice: "0x3b9aca00",
         };
@@ -148,16 +153,15 @@ it("clears an available hashless reservation and retries registration once", asy
   expect(calls.filter((call) => call === "eth_sendRawTransaction")).toHaveLength(1);
 });
 
-it.each([1, 2])(
-  "keeps a hashless reservation blocked when unavailable to this household (status %s)",
-  async (status) => {
-    const ctx = await reservedContext();
-    const calls = fakeRpc(status, resolver);
-    const response = await register(ctx);
-    expect(response.status).toBe(503);
-    expect(calls).not.toContain("eth_sendRawTransaction");
-  },
-);
+it.each([1])("keeps a reserved label blocked (status %s)", async (status) => {
+  const ctx = await reservedContext();
+  const calls = fakeRpc(status, resolver);
+  const response = await register(ctx);
+  expect(response.status).toBe(503);
+  expect(calls).not.toContain("eth_sendRawTransaction");
+  fakeRpc(0);
+  expect((await register(withLabel(ctx, "fresh"))).status).toBe(503);
+});
 
 it("stops after one failed retry and returns no JSON-RPC details", async () => {
   const ctx = await reservedContext();
@@ -169,4 +173,63 @@ it("stops after one failed retry and returns no JSON-RPC details", async () => {
     error: "Name registration unavailable",
   });
   expect(calls.filter((call) => call === "eth_sendRawTransaction")).toHaveLength(1);
+});
+
+function freshBinding(ctx: RouteContext): RouteContext {
+  const kv = ctx.env.PATA_KV;
+  const binding = { get: kv.get.bind(kv), put: kv.put.bind(kv), delete: kv.delete.bind(kv) } as KVNamespace;
+  return { ...ctx, env: { ...ctx.env, PATA_KV: binding } };
+}
+
+it("removes the persisted hash too, so a later uncertain write can reconcile on a fresh binding", async () => {
+  let ctx = await reservedContext();
+  await ctx.env.PATA_KV.put(`register:${ctx.env.PATA_REGISTRY_ADDRESS.toLowerCase()}:${owner}:hash`, hash);
+  fakeRpc(2, resolver);
+  expect((await register(ctx)).status).toBe(503);
+  ctx = withLabel(freshBinding(ctx), "fresh");
+  fakeRpc(0, owner, true);
+  expect((await register(ctx)).status).toBe(503);
+  ctx = freshBinding(ctx);
+  const calls = fakeRpc(0);
+  expect((await register(ctx)).status).toBe(200);
+  expect(calls.filter((call) => call === "eth_sendRawTransaction")).toHaveLength(1);
+});
+
+it("keeps a successful household registration reserved against a second free label", async () => {
+  const ctx = await reservedContext();
+  fakeRpc(2);
+  expect((await register(ctx)).status).toBe(200);
+  const calls = fakeRpc(0);
+  expect((await register(withLabel(ctx, "fresh"))).status).toBe(503);
+  expect(calls).not.toContain("eth_sendRawTransaction");
+});
+
+function withLabel(ctx: RouteContext, label: string): RouteContext {
+  return {
+    ...ctx,
+    body: new Uint8Array(new TextEncoder().encode(JSON.stringify({ label, resolver, grantRegistry }))).buffer,
+  };
+}
+
+it("releases a reverted saved registration so the household can choose a new free label", async () => {
+  const ctx = await reservedContext();
+  await ctx.env.PATA_KV.put(`register:${ctx.env.PATA_REGISTRY_ADDRESS.toLowerCase()}:${owner}:hash`, hash);
+  fakeRpc(0, owner, false, "0x0");
+  expect((await register(ctx)).status).toBe(503);
+  fakeRpc(0);
+  const response = await register(withLabel(ctx, "fresh"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ txHash: hash });
+});
+
+it.each([false, true])("releases a label owned by another household (saved hash: %s)", async (savedHash) => {
+  const ctx = await reservedContext();
+  if (savedHash)
+    await ctx.env.PATA_KV.put(`register:${ctx.env.PATA_REGISTRY_ADDRESS.toLowerCase()}:${owner}:hash`, hash);
+  fakeRpc(2, resolver);
+  expect((await register(ctx)).status).toBe(503);
+  fakeRpc(0);
+  const response = await register(withLabel(ctx, "fresh"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ txHash: hash });
 });

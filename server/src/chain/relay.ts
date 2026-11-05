@@ -75,6 +75,11 @@ async function reserveDailyTopup(env: Env, chain: "sepolia" | "arkiv", ip: strin
 
 export const TOPUP_TARGETS = { sepolia: parseEther("0.0005"), arkiv: parseEther("0.02") } as const;
 
+async function clearRegistration(env: Env, key: string): Promise<void> {
+  await reserve(env, `${key}:hash`, null);
+  await reserve(env, key, null);
+}
+
 function clients(env: Env, chain: "sepolia" | "arkiv") {
   const url =
     chain === "sepolia"
@@ -147,40 +152,42 @@ export async function registerHouseholdName(
       const key = `register:${registry.toLowerCase()}:${owner.toLowerCase()}`;
       const existing = await readReservation(env, key);
       if (existing !== null) {
-        if (existing !== label) throw new Error();
         const hash = await readReservation(env, `${key}:hash`);
-        if (!hash) {
-          const id = BigInt(labelhash(label));
-          const status = await publicClient.readContract({
+        const id = BigInt(labelhash(existing));
+        const status = await publicClient.readContract({
+          address: registry,
+          abi: registryAbi,
+          functionName: "getStatus",
+          args: [id],
+        });
+        if (status === 2) {
+          const registeredOwner = await publicClient.readContract({
             address: registry,
             abi: registryAbi,
-            functionName: "getStatus",
+            functionName: "getOwner",
             args: [id],
           });
-          if (status === 2) {
-            const registeredOwner = await publicClient.readContract({
-              address: registry,
-              abi: registryAbi,
-              functionName: "getOwner",
-              args: [id],
-            });
-            if (registeredOwner.toLowerCase() !== owner.toLowerCase()) throw new Error();
-            return null;
+          if (registeredOwner.toLowerCase() !== owner.toLowerCase()) {
+            await clearRegistration(env, key);
+            throw new Error();
           }
-          if (status !== 0) throw new Error();
-          // One retry in this invocation. A new uncertain send stays reserved for the next
-          // request to reconcile; never recurse or broadcast repeatedly here.
-          await reserve(env, key, null);
-        } else {
+        }
+        if (hash) {
           if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error();
           const receipt = await publicClient.waitForTransactionReceipt({
             hash: hash as `0x${string}`,
             timeout: 90000,
             pollingInterval: 4000,
           });
+          if (receipt.status === "reverted") await clearRegistration(env, key);
           if (receipt.status !== "success") throw new Error();
-          return hash as `0x${string}`;
         }
+        if (existing !== label) throw new Error();
+        if (hash) return hash as `0x${string}`;
+        if (status === 2) return null;
+        if (status !== 0) throw new Error();
+        // One retry in this invocation. An uncertain send stays reserved for reconciliation.
+        await reserve(env, key, null);
       }
       const status = await publicClient.readContract({
         address: registry,
@@ -218,6 +225,7 @@ export async function registerHouseholdName(
         timeout: 90000,
         pollingInterval: 4000,
       });
+      if (receipt.status === "reverted") await clearRegistration(env, key);
       if (receipt.status !== "success") throw new Error();
       return txHash;
     });
