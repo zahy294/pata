@@ -15,7 +15,7 @@
 	},
 	"vars": {
 		// Comma-separated origins allowed by CORS: the Pages host and localhost.
-		"ALLOWED_ORIGINS": "http://localhost:3000",
+		"ALLOWED_ORIGINS": "http://localhost:3000,https://pata.pata-ggr.workers.dev",
 		// "on" makes every route except /health answer 503 (CROPS "server off" demo, abuse).
 		"KILL_SWITCH": "off",
 		// Daily cap on model + speech spend, in US cents, counted in KV.
