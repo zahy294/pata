@@ -23,7 +23,7 @@
 - Locality searches must not silently use the much wider postcode bounding box. A postcode-only or invalid reply is rejected.
 - Only public locality/map answers are cached, never the way to the door, room number or household pin. Commits remain local on `feat/ai-ml` for the user to push.
 
-**Result:** adapters implemented; live Overpass verification and deployment coordination remain open.
+**Result:** adapters implemented; live map-search check **pending deployed Worker**. Deployment and atomic coordination belong to the owner; no shared Cloudflare access and no self-deployment. Owner will post the Worker URL after P0-6 review and pre-warm Dharavi/BKC. Prompt 4 may proceed with mocked fetch per the latest instruction.
 
 **Query review follow-up:** remove `place_of_worship` from the tag-key categories: OSM represents it as `amenity=place_of_worship`, already covered by the generic amenity selector. At the existing `featuresInBox` seam, first assert that the outbound query retains the amenity selector and omits the redundant standalone key; keep the returned temple assertion. Run `npm run check` and `git diff --check`, then commit this small correction. Deployment smoke still requires the intended Worker environment; do not start prompt 4.
 
