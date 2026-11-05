@@ -42,6 +42,7 @@
     "contracts",
     "server",
     "out",
-    ".next/cache"
+    ".next/cache",
+    "scripts"
   ]
 }
