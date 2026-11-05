@@ -23,7 +23,10 @@ const registryAbi = parseAbi([
 ]);
 const factoryAbi = parseAbi(["function verifyContract(address proxy) view returns (address)"]);
 
-const localValues = new WeakMap<Env["PATA_KV"], Map<string, { value: string; expires: number }>>();
+const localValues = new WeakMap<
+  Env["PATA_KV"],
+  Map<string, { value: string; expires: number; written: number }>
+>();
 async function readReservation(env: Env, key: string): Promise<string | null> {
   const entries = localValues.get(env.PATA_KV);
   const entry = entries?.get(key);
@@ -32,6 +35,9 @@ async function readReservation(env: Env, key: string): Promise<string | null> {
   return env.PATA_KV.get(key);
 }
 async function reserve(env: Env, key: string, value: string, ttl?: number): Promise<void> {
+  const lastWrite = localValues.get(env.PATA_KV)?.get(key)?.written ?? -Infinity;
+  const delay = lastWrite + 1000 - Date.now();
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
   await env.PATA_KV.put(key, value, ttl ? { expirationTtl: ttl } : undefined);
   let entries = localValues.get(env.PATA_KV);
   if (!entries) {
@@ -39,10 +45,33 @@ async function reserve(env: Env, key: string, value: string, ttl?: number): Prom
     localValues.set(env.PATA_KV, entries);
   }
   for (const [name, entry] of entries) if (entry.expires <= Date.now()) entries.delete(name);
-  entries.set(key, { value, expires: ttl ? Date.now() + ttl * 1000 : Infinity });
+  entries.set(key, { value, expires: ttl ? Date.now() + ttl * 1000 : Infinity, written: Date.now() });
 }
 
-export const TOPUP_TARGETS = { sepolia: parseEther("0.002"), arkiv: parseEther("0.2") } as const;
+export class RelayDailyLimitError extends Error {
+  constructor() {
+    super("Relay daily top-up limit reached");
+  }
+}
+
+async function reserveDailyTopup(env: Env, chain: "sepolia" | "arkiv", ip: string): Promise<void> {
+  await withKvLock(env, "relay:daily", async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const keys = [
+      [`topup:daily:${date}:chain:${chain}`, 40],
+      [`topup:daily:${date}:ip:${ip}`, 5],
+    ] as const;
+    const counts: number[] = [];
+    for (const [key, cap] of keys) {
+      const count = Number((await readReservation(env, key)) ?? 0);
+      if (!Number.isSafeInteger(count) || count < 0 || count >= cap) throw new RelayDailyLimitError();
+      counts.push(count);
+    }
+    for (const [index, [key]] of keys.entries()) await reserve(env, key, String(counts[index] + 1), 172800);
+  });
+}
+
+export const TOPUP_TARGETS = { sepolia: parseEther("0.0005"), arkiv: parseEther("0.02") } as const;
 
 function clients(env: Env, chain: "sepolia" | "arkiv") {
   const url =
@@ -72,6 +101,7 @@ export async function topUp(
   env: Env,
   chain: "sepolia" | "arkiv",
   to: `0x${string}`,
+  ip = "local",
 ): Promise<{ txHash: `0x${string}` | null; balanceWei: bigint }> {
   try {
     return await withKvLock(env, `relay:${chain}`, async () => {
@@ -81,6 +111,7 @@ export async function topUp(
       const key = `topup:${chain}:${to.toLowerCase()}`;
       const previous = await readReservation(env, key);
       if (previous !== null && Date.now() - Number(previous) < 600000) return { txHash: null, balanceWei };
+      await reserveDailyTopup(env, chain, ip);
       // Reserve before broadcast: an ambiguous RPC failure must not cause a second payment.
       await reserve(env, key, String(Date.now()), 600);
       const txHash = await wallet.sendTransaction({ to, value: TOPUP_TARGETS[chain] });
@@ -92,7 +123,8 @@ export async function topUp(
       if (receipt.status !== "success") throw new Error();
       return { txHash, balanceWei: await publicClient.getBalance({ address: to }) };
     });
-  } catch {
+  } catch (failure) {
+    if (failure instanceof RelayDailyLimitError) throw failure;
     throw new Error("Gas top-up unavailable");
   }
 }

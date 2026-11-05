@@ -103,7 +103,7 @@ export async function guard(
       }))
     )
       return denied;
-    return { ok: true, ctx: { env, household, body, url, waitUntil } };
+    return { ok: true, ctx: { env, household, ip, body, url, waitUntil } };
   } catch {
     return denied;
   }

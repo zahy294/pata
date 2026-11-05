@@ -5,7 +5,7 @@
 import type { RouteHandler } from "../env";
 import { error, json } from "../http";
 import { TopupRequest } from "../../../shared/api";
-import { topUp } from "../chain/relay";
+import { RelayDailyLimitError, topUp } from "../chain/relay";
 
 export const topup: RouteHandler = async (ctx) => {
   let input;
@@ -15,9 +15,10 @@ export const topup: RouteHandler = async (ctx) => {
     return error(400, "invalid_request", "Invalid top-up request");
   }
   try {
-    const result = await topUp(ctx.env, input.chain, ctx.household);
+    const result = await topUp(ctx.env, input.chain, ctx.household, ctx.ip);
     return json({ txHash: result.txHash, balanceWei: result.balanceWei.toString() });
-  } catch {
+  } catch (failure) {
+    if (failure instanceof RelayDailyLimitError) return error(429, "relay_daily_limit", failure.message);
     return error(503, "relay_unavailable", "Gas top-up unavailable");
   }
 };

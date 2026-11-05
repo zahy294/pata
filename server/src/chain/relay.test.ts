@@ -30,11 +30,92 @@ function context(body: unknown): RouteContext {
   return {
     env: testEnv(),
     household,
+    ip: "local",
     body: new Uint8Array(new TextEncoder().encode(JSON.stringify(body))).buffer,
     url: new URL("https://worker.test"),
     waitUntil() {},
   };
 }
+
+it.each(["sepolia", "arkiv"] as const)(
+  "refuses a 41st daily %s payment with relay_daily_limit",
+  async (network) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-06T00:00:00Z"));
+    const env = testEnv();
+    for (let i = 0; i < 40; i++) {
+      const ctx = {
+        ...context({ chain: network }),
+        env,
+        household: `0x${(i + 1).toString(16).padStart(40, "0")}` as `0x${string}`,
+        ip: `192.0.2.${i + 1}`,
+      };
+      expect((await topup(ctx)).status).toBe(200);
+      vi.setSystemTime(Date.now() + 1000);
+    }
+    const response = await topup({ ...context({ chain: network }), env, ip: "192.0.2.100" });
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ code: "relay_daily_limit" });
+    expect(chain.sendTransaction).toHaveBeenCalledTimes(40);
+    const otherChain = network === "sepolia" ? "arkiv" : "sepolia";
+    expect((await topup({ ...context({ chain: otherChain }), env, ip: "192.0.2.100" })).status).toBe(200);
+    vi.setSystemTime(new Date("2026-11-07T00:00:00Z"));
+    expect((await topup({ ...context({ chain: network }), env, ip: "192.0.2.100" })).status).toBe(200);
+  },
+);
+
+it("refuses a sixth payment from one IP across both chains", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-11-06T00:00:00Z"));
+  const env = testEnv();
+  for (let i = 0; i < 5; i++) {
+    expect(
+      (
+        await topup({
+          ...context({ chain: i % 2 ? "arkiv" : "sepolia" }),
+          env,
+          household: `0x${(i + 1).toString(16).padStart(40, "0")}` as `0x${string}`,
+          ip: "192.0.2.1",
+        })
+      ).status,
+    ).toBe(200);
+    vi.setSystemTime(Date.now() + 1000);
+  }
+  const response = await topup({ ...context({ chain: "arkiv" }), env, ip: "192.0.2.1" });
+  expect(response.status).toBe(429);
+  expect(await response.json()).toMatchObject({ code: "relay_daily_limit" });
+  expect(chain.sendTransaction).toHaveBeenCalledTimes(5);
+  vi.setSystemTime(Date.now() + 1000);
+  expect((await topup({ ...context({ chain: "arkiv" }), env, ip: "192.0.2.2" })).status).toBe(200);
+  vi.setSystemTime(new Date("2026-11-07T00:00:00Z"));
+  expect((await topup({ ...context({ chain: "arkiv" }), env, ip: "192.0.2.1" })).status).toBe(200);
+});
+
+it("retains daily quotas in KV across isolates and ignores spoofed body IPs", async () => {
+  const env = testEnv();
+  const date = new Date().toISOString().slice(0, 10);
+  await env.PATA_KV.put(`topup:daily:${date}:ip:192.0.2.1`, "5");
+  const response = await topup({ ...context({ chain: "arkiv", ip: "192.0.2.2" }), env, ip: "192.0.2.1" });
+  expect(response.status).toBe(429);
+  expect(chain.sendTransaction).not.toHaveBeenCalled();
+});
+
+it("does not charge daily quota for sufficient balances or cooldown skips", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-11-06T00:00:00Z"));
+  const env = testEnv();
+  await topUp(env, "sepolia", household, "192.0.2.1");
+  for (let i = 0; i < 6; i++) expect((await topUp(env, "sepolia", household, "192.0.2.1")).txHash).toBeNull();
+  const other = `0x${"55".repeat(20)}` as const;
+  chain.getBalance.mockResolvedValue(10000000000000000n);
+  for (let i = 0; i < 6; i++) expect((await topUp(env, "arkiv", other, "192.0.2.1")).txHash).toBeNull();
+  chain.getBalance.mockResolvedValue(0n);
+  for (let i = 0; i < 4; i++) {
+    vi.setSystemTime(Date.now() + 1000);
+    await topUp(env, "arkiv", `0x${(i + 1).toString(16).padStart(40, "0")}`, "192.0.2.1");
+  }
+  await expect(topUp(env, "arkiv", other, "192.0.2.1")).rejects.toThrow("Relay daily top-up limit reached");
+});
 
 it("topup route validates the chain and returns decimal balance for the signing household", async () => {
   const response = await topup(context({ chain: "arkiv" }));
@@ -176,13 +257,13 @@ it.each(["ab", "Sana", "a--b", "-sana", "sana-", "a".repeat(33), "sana~x"])(
 );
 
 it("sends the fixed Sepolia top-up and waits until it is spendable", async () => {
-  chain.getBalance.mockResolvedValueOnce(parseEther("0.0001")).mockResolvedValueOnce(parseEther("0.0021"));
+  chain.getBalance.mockResolvedValueOnce(parseEther("0.0001")).mockResolvedValueOnce(parseEther("0.0006"));
   expect(await topUp(testEnv(), "sepolia", household)).toEqual({
     txHash: hash,
-    balanceWei: parseEther("0.0021"),
+    balanceWei: parseEther("0.0006"),
   });
   expect(chain.sendTransaction).toHaveBeenCalledWith(
-    expect.objectContaining({ to: household, value: 2000000000000000n }),
+    expect.objectContaining({ to: household, value: 500000000000000n }),
   );
   expect(chain.waitForTransactionReceipt).toHaveBeenCalledWith({
     hash,
@@ -192,7 +273,7 @@ it("sends the fixed Sepolia top-up and waits until it is spendable", async () =>
 });
 
 it.each(["sepolia", "arkiv"] as const)("skips %s at or above half target", async (network) => {
-  const balance = network === "sepolia" ? 1000000000000000n : 100000000000000000n;
+  const balance = network === "sepolia" ? 250000000000000n : 10000000000000000n;
   chain.getBalance.mockResolvedValue(balance);
   expect(await topUp(testEnv(), network, household)).toEqual({ txHash: null, balanceWei: balance });
   expect(chain.sendTransaction).not.toHaveBeenCalled();
@@ -204,11 +285,12 @@ it("limits concurrent top-ups to one per household and chain for 10 minutes", as
   const env = testEnv();
   const results = await Promise.all([topUp(env, "sepolia", household), topUp(env, "sepolia", household)]);
   expect(results.map((r) => r.txHash)).toEqual([hash, null]);
+  vi.setSystemTime(Date.now() + 1000);
   expect((await topUp(env, "arkiv", household)).txHash).toBe(hash);
   expect(chain.sendTransaction).toHaveBeenLastCalledWith(
-    expect.objectContaining({ value: 200000000000000000n }),
+    expect.objectContaining({ value: 20000000000000000n }),
   );
-  vi.setSystemTime(Date.now() + 599000);
+  vi.setSystemTime(Date.now() + 598000);
   expect((await topUp(env, "sepolia", household)).txHash).toBeNull();
   vi.setSystemTime(Date.now() + 1000);
   expect((await topUp(env, "sepolia", household)).txHash).toBe(hash);
