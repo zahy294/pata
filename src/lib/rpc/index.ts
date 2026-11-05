@@ -12,30 +12,123 @@
 //   they call ../ens, ../arkiv or ../flows.
 import type { LocalAccount } from "viem/accounts";
 import type { PublicClient, WalletClient } from "viem";
+import { createPublicClient, createWalletClient, http } from "viem";
+import { sepolia } from "viem/chains";
+import { AnonRpcWorker } from "@anon-rpc/browser-harness";
+import {
+  createPublicClient as createArkivPublicClient,
+  createWalletClient as createArkivWalletClient,
+} from "@arkiv-network/sdk";
+import { rabdi } from "@arkiv-network/sdk/chains";
+import { NOX_SPECIFIER } from "../../../shared/constants";
+import { env } from "../env";
+
+let worker: AnonRpcWorker | undefined;
+let sepoliaReads: PublicClient | undefined;
+let arkivReads: ReturnType<typeof makeArkivPublicClient> | undefined;
+
+type RpcLogEntry = { chain: "sepolia" | "arkiv"; method: string; via: "nox" | "direct"; at: number };
+const entries: RpcLogEntry[] = [];
+
+function rpcTransport(chain: RpcLogEntry["chain"], url: string, via: RpcLogEntry["via"]) {
+  return http(url, {
+    fetchFn: via === "nox" ? getWorker().fetch : undefined,
+    timeout: 30_000,
+    retryCount: 0,
+    onFetchRequest(_request, init) {
+      // The body is transient. Retain method names only, never params or URLs.
+      const body = JSON.parse(String(init.body));
+      for (const call of Array.isArray(body) ? body : [body]) {
+        entries.push({ chain, method: call.method, via, at: Date.now() });
+      }
+    },
+  });
+}
+
+function arkivUrl(): string {
+  const key = env.arkivAccessKey;
+  return env.arkivRpcUrl.replace(/\/+$/, "") + (key ? `/${encodeURIComponent(key)}` : "");
+}
+
+function makeArkivPublicClient() {
+  return createArkivPublicClient({
+    chain: rabdi({ accessKey: env.arkivAccessKey }),
+    ccipRead: false,
+    pollingInterval: 1000,
+    transport: rpcTransport("arkiv", arkivUrl(), "nox"),
+  });
+}
+
+function getWorker(): AnonRpcWorker {
+  if (typeof window === "undefined") throw new Error("Private RPC is only available in the browser");
+  if (!worker) {
+    const bootstrap = createPublicClient({
+      chain: sepolia,
+      ccipRead: false,
+      transport: rpcTransport("sepolia", env.sepoliaRpcUrl, "direct"),
+    });
+    worker = new AnonRpcWorker({
+      address: NOX_SPECIFIER,
+      config: undefined,
+      preExisting: { rpcProvider: { request: (args) => bootstrap.transport.request(args) } },
+    });
+    void discardWorkerLogs(worker);
+    // A caller may construct a client before awaiting readiness.
+    void worker.ready.catch(() => {});
+  }
+  return worker;
+}
+
+async function discardWorkerLogs(instance: AnonRpcWorker): Promise<void> {
+  // Claim the stream immediately: unclaimed harness logs are echoed to console.
+  try {
+    while (true) await instance.acceptLog();
+  } catch {
+    /* Closed worker. Discard raw errors too. */
+  }
+}
 
 /** Starts the worker if needed and resolves when it's ready. Safe to call many times. */
 export async function anonRpcReady(): Promise<void> {
-  throw new Error("anonRpcReady: not implemented (P0-5)");
+  const instance = getWorker();
+  try {
+    await instance.ready;
+  } catch {
+    throw new Error("Private RPC could not start");
+  }
 }
 
 export function sepoliaPublicClient(): PublicClient {
-  throw new Error("sepoliaPublicClient: not implemented (P0-5)");
+  return (sepoliaReads ??= createPublicClient({
+    chain: sepolia,
+    ccipRead: false,
+    transport: rpcTransport("sepolia", env.sepoliaRpcUrl, "nox"),
+  }));
 }
 
 export function sepoliaWalletClient(account: LocalAccount): WalletClient {
-  void account;
-  throw new Error("sepoliaWalletClient: not implemented (P0-5)");
+  return createWalletClient({
+    chain: sepolia,
+    account,
+    ccipRead: false,
+    transport: rpcTransport("sepolia", env.sepoliaRpcUrl, env.directWrites ? "direct" : "nox"),
+  });
 }
 
 /** Arkiv SDK public client (createPublicClient from @arkiv-network/sdk) over the worker. */
-export function arkivPublicClient(): unknown {
-  throw new Error("arkivPublicClient: not implemented (P0-5)");
+export function arkivPublicClient() {
+  return (arkivReads ??= makeArkivPublicClient());
 }
 
 /** Arkiv SDK wallet client for the household or the grant owner. */
-export function arkivWalletClient(account: LocalAccount): unknown {
-  void account;
-  throw new Error("arkivWalletClient: not implemented (P0-5)");
+export function arkivWalletClient(account: LocalAccount) {
+  return createArkivWalletClient({
+    chain: rabdi({ accessKey: env.arkivAccessKey }),
+    account,
+    ccipRead: false,
+    pollingInterval: 1000,
+    transport: rpcTransport("arkiv", arkivUrl(), env.directWrites ? "direct" : "nox"),
+  });
 }
 
 /** Every method name the worker carried, for the hour-0 test and the CROPS proof. */
@@ -45,5 +138,5 @@ export function rpcLog(): {
   via: "nox" | "direct";
   at: number;
 }[] {
-  throw new Error("rpcLog: not implemented (P0-5)");
+  return entries.map((entry) => ({ ...entry }));
 }
