@@ -10,4 +10,4 @@
 
 **Risks:** no Worker deployed until owner reviews P0-6; no shared Cloudflare access. Live smoke is **pending deployed Worker**. Owner will post `NEXT_PUBLIC_SERVER_URL` and pre-warm Dharavi/BKC. The 90-second network allowance does not prove the free Worker's CPU budget; verify parsing/geometry in that deployment. Preserve endpoint override support and the existing atomic-coordination hand-off.
 
-**Result:** pending implementation. No deployment attempted.
+**Result:** implemented test-first. Query uses 60 seconds, fetch uses 90 seconds, and highway geometry is limited to the ten requested values. Network, HTTP, partial and malformed map failures return uncached empty features/streets; invalid bounds still reject. Existing retry/backoff and amenity coverage remain. `npm run check` passes: both typechecks, 164 Vitest tests (17 existing TODOs), one Foundry test. `git diff --check` passes. Live smoke remains **pending deployed Worker**; no deployment attempted.

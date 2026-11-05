@@ -21,6 +21,7 @@ const reply = {
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -39,10 +40,10 @@ describe("featuresInBox", () => {
       }),
     );
     const work = featuresInBox(kv, bbox, []);
-    const rejected = expect(work).rejects.toThrow(/^Map search unavailable$/);
+    const fallback = expect(work).resolves.toEqual({ features: [], streets: [] });
     await vi.waitFor(() => expect(starts).toHaveLength(1));
     await vi.runAllTimersAsync();
-    await rejected;
+    await fallback;
     expect(starts).toHaveLength(2);
     expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(45000);
     expect([...values.keys()].filter((key) => key.startsWith("geo:v1:"))).toEqual([]);
@@ -72,16 +73,17 @@ describe("featuresInBox", () => {
   it.each([
     { body: { remark: "runtime error: timed out", elements: [] } },
     { body: { message: "bad schema" } },
-  ])("rejects incomplete or malformed replies without caching them", async ({ body }) => {
+  ])("discards incomplete or malformed replies without caching them", async ({ body }) => {
     const { kv, values } = memoryCache();
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json(body)));
-    await expect(featuresInBox(kv, bbox, [])).rejects.toThrow("Map search unavailable");
+    await expect(featuresInBox(kv, bbox, [])).resolves.toEqual({ features: [], streets: [] });
     expect([...values.keys()].filter((key) => key.startsWith("geo:v1:"))).toEqual([]);
   });
-  it("drops network errors rather than exposing their request details", async () => {
-    const { kv } = memoryCache();
+  it("returns an uncached empty result on network failure for the hand-dropped-pin path", async () => {
+    const { kv, values } = memoryCache();
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockRejectedValue(new Error("PRIVATE_NETWORK_DETAILS")));
-    await expect(featuresInBox(kv, bbox, [])).rejects.toThrow(/^Map search unavailable$/);
+    await expect(featuresInBox(kv, bbox, [])).resolves.toEqual({ features: [], streets: [] });
+    expect([...values.keys()].filter((key) => key.startsWith("geo:v1:"))).toEqual([]);
   });
   it.each([{ box: [72, 20, 71, 21] }, { box: [72, 20, 73, 19] }, { box: [NaN, 19, 73, 20] }])(
     "rejects invalid bbox before sending a query",
@@ -157,6 +159,7 @@ describe("featuresInBox", () => {
     expect(kv.put).toHaveBeenCalledWith(expect.any(String), expect.any(String), { expirationTtl: 2592000 });
   });
   it("fetches a bounded query and returns features plus lon/lat street geometry", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
     const { kv } = memoryCache();
     const network = vi.fn<typeof fetch>().mockResolvedValue(Response.json(reply));
     vi.stubGlobal("fetch", network);
@@ -185,10 +188,14 @@ describe("featuresInBox", () => {
     const [, init] = network.mock.calls[0];
     const query = new URLSearchParams(String(init?.body)).get("data");
     expect(query).toContain("[bbox:19.036,72.848,19.055,72.866]");
-    expect(query).toContain("[timeout:25][maxsize:67108864]");
+    expect(query).toContain("[timeout:60][maxsize:67108864]");
+    expect(timeout).toHaveBeenCalledWith(90000);
     expect(query).toContain('nwr["amenity"]["name"]');
     expect(query).not.toContain('["place_of_worship"]');
-    expect(query).toContain('way["highway"]');
+    expect(query).toContain(
+      'way["highway"~"^(residential|service|living_street|unclassified|tertiary|secondary|primary|pedestrian|footway|path)$"]',
+    );
+    expect(query).not.toContain('way["highway"];');
     expect(new Headers(init?.headers).get("User-Agent")).toContain("Pata/0.1");
   });
 });
