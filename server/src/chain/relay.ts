@@ -59,7 +59,7 @@ function clients(env: Env, chain: "sepolia" | "arkiv") {
           rpcUrls: { default: { http: [url] } },
           blockTime: 2000,
         });
-  const transport = http(url);
+  const transport = http(url, { retryCount: 0 });
   const account = privateKeyToAccount(env.RELAY_PRIVATE_KEY);
   return {
     publicClient: createPublicClient({ chain: network, transport, ccipRead: false }),
@@ -84,7 +84,11 @@ export async function topUp(
       // Reserve before broadcast: an ambiguous RPC failure must not cause a second payment.
       await reserve(env, key, String(Date.now()), 600);
       const txHash = await wallet.sendTransaction({ to, value: TOPUP_TARGETS[chain] });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 90000,
+        pollingInterval: 4000,
+      });
       if (receipt.status !== "success") throw new Error();
       return { txHash, balanceWei: await publicClient.getBalance({ address: to }) };
     });
@@ -112,7 +116,11 @@ export async function registerHouseholdName(
         if (existing !== label) throw new Error();
         const hash = await readReservation(env, `${key}:hash`);
         if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error();
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: hash as `0x${string}`,
+          timeout: 90000,
+          pollingInterval: 4000,
+        });
         if (receipt.status !== "success") throw new Error();
         return hash as `0x${string}`;
       }
@@ -147,7 +155,11 @@ export async function registerHouseholdName(
       await reserve(env, key, label);
       const txHash = await wallet.writeContract(request);
       await reserve(env, `${key}:hash`, txHash);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 90000,
+        pollingInterval: 4000,
+      });
       if (receipt.status !== "success") throw new Error();
       return txHash;
     });

@@ -119,6 +119,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("accepts the 120-second boundary and rejects route or query replay", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-11-06T00:00:00Z"));
+  const timestamp = Math.floor(Date.now() / 1000);
+  for (const offset of [-120, 120]) {
+    expect((await guard(await signed("{}", timestamp + offset), testEnv(), () => {})).ok).toBe(true);
+  }
+  const original = await signed("{}", timestamp, "/speech/in?lang=hi");
+  for (const route of ["/speech/in?lang=mr", "/speech/out?lang=hi"]) {
+    const result = await guard(
+      new Request(`https://worker.test${route}`, { method: "POST", body: "{}", headers: original.headers }),
+      testEnv(),
+      () => {},
+    );
+    expect(result.ok ? 200 : result.response.status).toBe(401);
+  }
+});
+
 it("refuses spending beyond the cap and starts a fresh UTC date", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-06T23:59:58Z"));

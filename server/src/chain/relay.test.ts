@@ -82,7 +82,11 @@ it("registers a forever household name with the household as owner", async () =>
       args: ["sana", household, grantRegistry, resolver, HOUSEHOLD_NAME_ROLES, FOREVER_EXPIRY],
     }),
   );
-  expect(chain.waitForTransactionReceipt).toHaveBeenCalledWith({ hash });
+  expect(chain.waitForTransactionReceipt).toHaveBeenCalledWith({
+    hash,
+    timeout: 90000,
+    pollingInterval: 4000,
+  });
 });
 
 it.each([1, 2])("refuses reserved or registered labels (status %s)", async (status) => {
@@ -180,7 +184,11 @@ it("sends the fixed Sepolia top-up and waits until it is spendable", async () =>
   expect(chain.sendTransaction).toHaveBeenCalledWith(
     expect.objectContaining({ to: household, value: 2000000000000000n }),
   );
-  expect(chain.waitForTransactionReceipt).toHaveBeenCalledWith({ hash });
+  expect(chain.waitForTransactionReceipt).toHaveBeenCalledWith({
+    hash,
+    timeout: 90000,
+    pollingInterval: 4000,
+  });
 });
 
 it.each(["sepolia", "arkiv"] as const)("skips %s at or above half target", async (network) => {
