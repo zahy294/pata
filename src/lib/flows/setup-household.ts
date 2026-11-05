@@ -9,6 +9,7 @@ import type {
   Locality,
   OsmFeature,
   Relation,
+  HomeRecord,
 } from "../../../shared/domain";
 import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
@@ -16,6 +17,16 @@ import type { HouseholdState } from "../keys/store";
 import { deriveHouseholdKeys, newRandomRoot } from "../keys";
 import { loadDeviceRoot, saveDeviceRoot } from "../keys/store";
 import { withDeviceLock } from "../keys/device-lock";
+import { topup, registerName } from "../server-client";
+import { deployHouseholdContracts } from "../ens/household";
+import { dnsEncode, isValidHouseholdLabel } from "../ens/names";
+import { universalHelperAbi } from "../ens/abis";
+import { sepoliaPublicClient, arkivPublicClient } from "../rpc";
+import { createHomeRecord } from "../arkiv";
+import { encodeDigipin } from "../digipin";
+import { saveHouseholdState, loadSetupCheckpoint, saveSetupCheckpoint } from "../keys/store";
+import { sealJson, openJson } from "../seal";
+import { ENS, PROVIDER_NAME, RECORD_KEYS } from "../../../shared/constants";
 
 /** P0: load the device root or make a new one; P1-3: passkey. */
 export async function signIn(): Promise<HouseholdKeys> {
@@ -82,8 +93,151 @@ export interface NewHousehold {
 }
 
 /** Steps 6–8: topup, factory deploys, /register, locality record, sealed home record. */
-export async function createHousehold(keys: HouseholdKeys, input: NewHousehold): Promise<HouseholdState> {
-  void keys;
-  void input;
-  throw new Error("createHousehold: not implemented (P0-8)");
+export type SetupStep =
+  "topup-sepolia" | "topup-arkiv" | "deploy" | "register" | "resolve" | "home-record" | "save" | "complete";
+
+async function confirmTransaction(chain: "sepolia" | "arkiv", hash: `0x${string}`): Promise<void> {
+  try {
+    const client = chain === "sepolia" ? sepoliaPublicClient() : arkivPublicClient();
+    if ((await client.waitForTransactionReceipt({ hash })).status !== "success") throw new Error("Reverted");
+  } catch {
+    throw new Error("Could not confirm household transaction");
+  }
+}
+
+async function waitForHousehold(
+  name: string,
+  ownerAddress: `0x${string}`,
+  locality: Locality,
+): Promise<void> {
+  const client = sepoliaPublicClient();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const [owner, location, pinCode] = await Promise.all([
+        client.readContract({
+          address: ENS.universalHelper,
+          abi: universalHelperAbi,
+          functionName: "findExactOwner",
+          args: [dnsEncode(name)],
+        }),
+        client.getEnsText({
+          name,
+          key: RECORD_KEYS.location,
+          universalResolverAddress: ENS.universalResolver,
+        }),
+        client.getEnsText({
+          name,
+          key: RECORD_KEYS.pinCode,
+          universalResolverAddress: ENS.universalResolver,
+        }),
+      ]);
+      if (
+        owner.toLowerCase() === ownerAddress.toLowerCase() &&
+        location === `${locality.name}, ${locality.pinCode}` &&
+        pinCode === locality.pinCode
+      )
+        return;
+    } catch {
+      /* RPC errors may contain request bodies: expose only the final plain message. */
+    }
+    if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("Household name has not resolved yet. Retry to check again.");
+}
+
+export async function createHousehold(
+  keys: HouseholdKeys,
+  input: NewHousehold,
+  onProgress: (step: SetupStep) => void = () => {},
+): Promise<HouseholdState> {
+  return withDeviceLock("household-setup", async () => {
+    if (
+      !isValidHouseholdLabel(input.label) ||
+      !input.locality.name.trim() ||
+      input.locality.name.length > 80 ||
+      !/^\d{6}$/.test(input.locality.pinCode)
+    )
+      throw new Error("Invalid household details");
+    const name = `${input.label}.${PROVIDER_NAME}`;
+    const home: HomeRecord = {
+      version: 1,
+      digipin: encodeDigipin(input.confirmedPin),
+      pin: input.confirmedPin,
+      locality: input.locality,
+      roomNumber: input.roomNumber,
+      writtenAddress: input.writtenAddress,
+      directions: input.directions,
+      voiceKeys: input.voiceKeys,
+    };
+    const checkpoint = (await loadSetupCheckpoint(keys.address)) ?? {
+      name,
+      sealedHome: await sealJson(keys.sealKey, home),
+    };
+    if (
+      checkpoint.name !== name ||
+      JSON.stringify(await openJson(keys.sealKey, checkpoint.sealedHome)) !== JSON.stringify(home)
+    )
+      throw new Error("Resume setup with the original household details");
+    const save = () => saveSetupCheckpoint(keys.address, checkpoint);
+    if (checkpoint.pending)
+      throw new Error(`Setup ${checkpoint.pending} needs transaction verification before retrying`);
+    await save();
+    for (const chain of ["sepolia", "arkiv"] as const) {
+      const field = chain === "sepolia" ? "sepoliaFunded" : "arkivFunded";
+      if (checkpoint[field]) continue;
+      onProgress(chain === "sepolia" ? "topup-sepolia" : "topup-arkiv");
+      const response = await topup(keys, { chain }).catch(() => {
+        throw new Error(`Could not fund household on ${chain}`);
+      });
+      if (response.txHash) {
+        await confirmTransaction(chain, response.txHash);
+      }
+      checkpoint[field] = true;
+      await save();
+    }
+    if (!checkpoint.contracts) {
+      onProgress("deploy");
+      checkpoint.pending = "deploy";
+      await save();
+      checkpoint.contracts = await deployHouseholdContracts(keys, name, input.locality);
+      delete checkpoint.pending;
+      await save();
+    }
+    const contracts = checkpoint.contracts;
+    if (!checkpoint.registered) {
+      onProgress("register");
+      if (!checkpoint.registrationHash) {
+        checkpoint.pending = "register";
+        await save();
+        const registration = await registerName(keys, { label: input.label, ...contracts }).catch(() => {
+          throw new Error("Could not register household name");
+        });
+        checkpoint.registrationHash = registration.txHash;
+        delete checkpoint.pending;
+        await save();
+      }
+      await confirmTransaction("sepolia", checkpoint.registrationHash);
+      checkpoint.registered = true;
+      await save();
+    }
+    if (!checkpoint.resolved) {
+      onProgress("resolve");
+      await waitForHousehold(name, keys.address, input.locality);
+      checkpoint.resolved = true;
+      await save();
+    }
+    if (!checkpoint.homeRecordKey) {
+      onProgress("home-record");
+      checkpoint.pending = "home-record";
+      await save();
+      checkpoint.homeRecordKey = await createHomeRecord(keys, home);
+      delete checkpoint.pending;
+      await save();
+    }
+    const state = { name, ...contracts, homeRecordKey: checkpoint.homeRecordKey };
+    onProgress("save");
+    await saveHouseholdState(state);
+    onProgress("complete");
+    return state;
+  });
 }

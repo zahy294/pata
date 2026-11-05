@@ -11,6 +11,21 @@ export interface HouseholdState {
   homeRecordKey: `0x${string}`;
 }
 
+/** A setup journal holds exact-address input only inside household-sealed bytes. */
+export interface SetupCheckpoint {
+  name: string;
+  sealedHome: Uint8Array;
+  sepoliaFunded?: boolean;
+  arkivFunded?: boolean;
+  contracts?: { resolver: `0x${string}`; grantRegistry: `0x${string}` };
+  registrationHash?: `0x${string}`;
+  registered?: boolean;
+  resolved?: boolean;
+  homeRecordKey?: `0x${string}`;
+  /** A request may have been sent; without a returned result, never blindly replay it. */
+  pending?: "deploy" | "register" | "home-record";
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("pata", 1);
@@ -69,5 +84,22 @@ export async function loadHouseholdState(): Promise<HouseholdState | null> {
   return (
     (await transaction<HouseholdState | undefined>("readonly", (store) => store.get("household-state"))) ??
     null
+  );
+}
+
+export async function saveSetupCheckpoint(
+  address: `0x${string}`,
+  checkpoint: SetupCheckpoint,
+): Promise<void> {
+  if (typeof indexedDB === "undefined") throw new Error("Device storage is unavailable");
+  await transaction("readwrite", (store) => store.put(checkpoint, `setup:${address.toLowerCase()}`));
+}
+
+export async function loadSetupCheckpoint(address: `0x${string}`): Promise<SetupCheckpoint | null> {
+  if (typeof indexedDB === "undefined") return null;
+  return (
+    (await transaction<SetupCheckpoint | undefined>("readonly", (store) =>
+      store.get(`setup:${address.toLowerCase()}`),
+    )) ?? null
   );
 }
