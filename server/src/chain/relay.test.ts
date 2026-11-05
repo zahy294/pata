@@ -64,11 +64,11 @@ it.each(["sepolia", "arkiv"] as const)(
   },
 );
 
-it("refuses a sixth payment from one IP across both chains", async () => {
+it("allows 20 payments from the venue IP across chains and refuses the 21st", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-06T00:00:00Z"));
   const env = testEnv();
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 20; i++) {
     expect(
       (
         await topup({
@@ -84,7 +84,7 @@ it("refuses a sixth payment from one IP across both chains", async () => {
   const response = await topup({ ...context({ chain: "arkiv" }), env, ip: "192.0.2.1" });
   expect(response.status).toBe(429);
   expect(await response.json()).toMatchObject({ code: "relay_daily_limit" });
-  expect(chain.sendTransaction).toHaveBeenCalledTimes(5);
+  expect(chain.sendTransaction).toHaveBeenCalledTimes(20);
   vi.setSystemTime(Date.now() + 1000);
   expect((await topup({ ...context({ chain: "arkiv" }), env, ip: "192.0.2.2" })).status).toBe(200);
   vi.setSystemTime(new Date("2026-11-07T00:00:00Z"));
@@ -94,7 +94,7 @@ it("refuses a sixth payment from one IP across both chains", async () => {
 it("retains daily quotas in KV across isolates and ignores spoofed body IPs", async () => {
   const env = testEnv();
   const date = new Date().toISOString().slice(0, 10);
-  await env.PATA_KV.put(`topup:daily:${date}:ip:192.0.2.1`, "5");
+  await env.PATA_KV.put(`topup:daily:${date}:ip:192.0.2.1`, "20");
   const response = await topup({ ...context({ chain: "arkiv", ip: "192.0.2.2" }), env, ip: "192.0.2.1" });
   expect(response.status).toBe(429);
   expect(chain.sendTransaction).not.toHaveBeenCalled();
@@ -110,7 +110,7 @@ it("does not charge daily quota for sufficient balances or cooldown skips", asyn
   chain.getBalance.mockResolvedValue(10000000000000000n);
   for (let i = 0; i < 6; i++) expect((await topUp(env, "arkiv", other, "192.0.2.1")).txHash).toBeNull();
   chain.getBalance.mockResolvedValue(0n);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 19; i++) {
     vi.setSystemTime(Date.now() + 1000);
     await topUp(env, "arkiv", `0x${(i + 1).toString(16).padStart(40, "0")}`, "192.0.2.1");
   }

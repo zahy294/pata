@@ -61,7 +61,7 @@ async function reserveDailyTopup(env: Env, chain: "sepolia" | "arkiv", ip: strin
     const date = new Date().toISOString().slice(0, 10);
     const keys = [
       [`topup:daily:${date}:chain:${chain}`, 40],
-      [`topup:daily:${date}:ip:${ip}`, 5],
+      [`topup:daily:${date}:ip:${ip}`, 20],
     ] as const;
     const counts: number[] = [];
     for (const [key, cap] of keys) {
