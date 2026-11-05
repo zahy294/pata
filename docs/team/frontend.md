@@ -19,7 +19,7 @@ Ticket: P0-10 (link part). Use the tdd skill.
 2. In src/lib/link/index.ts implement toBase64Url, fromBase64Url, formatCourierLink and parseCourierFragment exactly as the file header says: https://<origin>/c#1~<household name>~<payload key>~<session key>, keys as base64url without padding, payload key is 32 bytes (0x-hex in memory), session key is 32 bytes.
 3. Turn every it.todo in src/lib/link/link.test.ts into a real test first, watch it fail, then implement. Add tests for: a household name with a hyphen, a 31-byte key (rejected), extra "~" fields (rejected), version "2" (rejected).
 4. Pure TypeScript only: no browser globals, so tests run in Node.
-Done when npm run check passes. Commit in small steps ("P0-10: base64url", "P0-10: format and parse courier links"), pull --rebase, push.
+Done when npm run check passes. Commit in small steps ("P0-10: base64url", "P0-10: format and parse courier links"), push your branch, open a pull request to main.
 ```
 
 ### Prompt 2: app shell and the map

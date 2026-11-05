@@ -25,7 +25,7 @@ Ticket: P0-4. Use the tdd skill.
 3. Load vectors from src/lib/digipin/vectors.json. Dak Bhawan (28.622788, 77.213033) -> 39J49LL8T4 is the reference. Vectors 2 and 3 conflict upstream (digipin.md says why): if one fails, record which and why in the plan rather than bending the code.
 4. Round-trip test: 1,000 seeded random points inside the bounds; each encodes to a code whose decoded cell contains the point.
 5. Compute the Dak Bhawan decode centre and add it to vectors.json (the Solidity resolver tests will reuse the file).
-Done when npm run check passes. Small commits ("P0-4: encode", "P0-4: decode", ...), pull --rebase, push. Post "Unblocks: digipin" in the team chat.
+Done when npm run check passes. Small commits ("P0-4: encode", "P0-4: decode", ...), push your branch, open a pull request to main. Post "Unblocks: digipin" in the team chat.
 ```
 
 ### Prompt 2: plain geometry
