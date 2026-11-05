@@ -13,6 +13,7 @@ import type {
 import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
 import type { HouseholdState } from "../keys/store";
+import { extractAddress, rankLandmarks } from "../server-client";
 
 /** P0: load the device root or make a new one; P1-3: passkey. */
 export async function signIn(): Promise<HouseholdKeys> {
@@ -25,10 +26,9 @@ export async function describeTheWay(
   input: Blob | string,
   language: Language,
 ): Promise<{ wayToTheDoor: string; locality: Locality | null; landmarkPhrases: string[] }> {
-  void keys;
-  void input;
-  void language;
-  throw new Error("describeTheWay: not implemented (P0-7)");
+  if (typeof input !== "string") throw new Error("Speech input is not available yet");
+  const parts = await extractAddress(keys, { wayToTheDoor: input, language });
+  return { wayToTheDoor: input, ...parts };
 }
 
 /** Step 3–4: candidate pins from the server. Empty candidates → hand-dropped pin. */
@@ -38,11 +38,7 @@ export async function findCandidatePins(
   locality: Locality,
   landmarkPhrases: string[],
 ): Promise<RankResponse> {
-  void keys;
-  void wayToTheDoor;
-  void locality;
-  void landmarkPhrases;
-  throw new Error("findCandidatePins: not implemented (P0-7)");
+  return rankLandmarks(keys, { wayToTheDoor, locality, landmarkPhrases });
 }
 
 /** Step 5: directions in hi/mr/en from the confirmed pin, then one clip each, sealed to Arkiv. */

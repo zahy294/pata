@@ -18,6 +18,7 @@ Until the owner's guard (P0-6) lands, every route returns 500, so unit-test your
 - [x] P0-4: DIGIPIN encode/decode, reusable vectors, 1,000 seeded round-trips and edge tests; `npm run check` passes. Result: `docs/plans/P0-4.md`.
 - [x] P0-7 geometry: shared distance, bearing, offset, segment snapping and pin-spread tests; `npm run check` passes. Result: `docs/plans/P0-7-geo.md`. Map search, AI and speech remain pending.
 - [ ] P0-7 map search: adapters implemented; live check **pending deployed Worker** (owner deploys after P0-6 review and pre-warms Dharavi/BKC). Owner global-coordination integration remains open. Details: `docs/plans/P0-7-osm.md`.
+- [ ] P0-7 address AI (Prompt 4): extraction, ranking, pin placement, routes, signed client and typed setup flow implemented with mocked-fetch coverage. P0-6 spend/signature integration and live typed Dharavi check remain pending deployed Worker. Details: `docs/plans/P0-7-ai.md`.
 
 ---
 
