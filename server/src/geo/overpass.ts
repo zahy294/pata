@@ -29,7 +29,8 @@ const elementSchema = z.object({
   geometry: z.array(pointSchema).optional(),
   tags: z.record(z.string(), z.string()).default({}),
 });
-const categories = ["amenity", "shop", "building", "tourism", "leisure", "place_of_worship"];
+// Places of worship use amenity=place_of_worship and are covered by amenity.
+const categories = ["amenity", "shop", "building", "tourism", "leisure"];
 const resultSchema = z.object({
   features: z.array(z.object({ osmId: z.string(), name: z.string(), kind: z.string(), point: pointSchema })),
   streets: z.array(

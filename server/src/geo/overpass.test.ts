@@ -186,6 +186,8 @@ describe("featuresInBox", () => {
     const query = new URLSearchParams(String(init?.body)).get("data");
     expect(query).toContain("[bbox:19.036,72.848,19.055,72.866]");
     expect(query).toContain("[timeout:25][maxsize:67108864]");
+    expect(query).toContain('nwr["amenity"]["name"]');
+    expect(query).not.toContain('["place_of_worship"]');
     expect(query).toContain('way["highway"]');
     expect(new Headers(init?.headers).get("User-Agent")).toContain("Pata/0.1");
   });
