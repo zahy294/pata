@@ -1,13 +1,13 @@
 # Team guide
 
-Four people, each with a Codex agent. Each role has its own file with the prompts to paste into Codex, in order:
+Four people, each with a Codex agent. Each developer role has its own file with the prompts to paste into Codex, in order. The project owner works from their own notes.
 
-| Role                              | File                                             | Owns                                                                                                                                               |
-| --------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Chain ops + pitch (project owner) | [chain-ops-and-pitch.md](chain-ops-and-pitch.md) | the deployer and relay keys, parent names, hour-0 tests, the Worker's base (guard, `/topup`, `/register`), deploys, README, `/arkiv/` prose, video |
-| Frontend                          | [frontend.md](frontend.md)                       | every screen, components, map, courier link format, PWA, Playwright                                                                                |
-| AI/ML                             | [ai-ml.md](ai-ml.md)                             | DIGIPIN, geometry, the address and speech routes, the accuracy test                                                                                |
-| Blockchain                        | [blockchain.md](blockchain.md)                   | keys, encryption, Anon-RPC, ENS, Arkiv, the grant flows, the DigipinResolver contract                                                              |
+| Role                              | File                           | Owns                                                                                                                                               |
+| --------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chain ops + pitch (project owner) | (owner's own notes)            | the deployer and relay keys, parent names, hour-0 tests, the Worker's base (guard, `/topup`, `/register`), deploys, README, `/arkiv/` prose, video |
+| Frontend                          | [frontend.md](frontend.md)     | every screen, components, map, courier link format, PWA, Playwright                                                                                |
+| AI/ML                             | [ai-ml.md](ai-ml.md)           | DIGIPIN, geometry, the address and speech routes, the accuracy test                                                                                |
+| Blockchain                        | [blockchain.md](blockchain.md) | keys, encryption, Anon-RPC, ENS, Arkiv, the grant flows, the DigipinResolver contract                                                              |
 
 ## Getting started (each developer, once)
 
