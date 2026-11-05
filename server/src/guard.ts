@@ -9,7 +9,7 @@
 // Never log the body. Never forward a viem error message to the client.
 import type { Env, RouteContext } from "./env";
 import { allowedOrigin, error } from "./http";
-import { getAddress, sha256, toHex, verifyMessage } from "viem";
+import { getAddress, verifyMessage } from "viem";
 import { SIGNATURE_HEADERS, signedMessage } from "../../shared/api";
 
 export type GuardResult = { ok: true; ctx: RouteContext } | { ok: false; response: Response };
@@ -90,15 +90,15 @@ export async function guard(
     if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 120) return denied;
     const url = new URL(request.url);
     const body = await request.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", body);
+    const bodyHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
+      "",
+    );
     const household = getAddress(address);
     if (
       !(await verifyMessage({
         address: household,
-        message: signedMessage(
-          url.pathname + url.search,
-          timestamp,
-          sha256(toHex(new Uint8Array(body))).slice(2),
-        ),
+        message: signedMessage(url.pathname + url.search, timestamp, bodyHash),
         signature: signature as `0x${string}`,
       }))
     )

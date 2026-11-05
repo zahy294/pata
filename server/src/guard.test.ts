@@ -37,6 +37,13 @@ it("accepts a household signature with no Origin and preserves exact body bytes"
 
 const execution = { waitUntil() {} } as unknown as ExecutionContext;
 
+it("uses native SHA-256 while accepting the unchanged signing format", async () => {
+  const digest = vi.spyOn(crypto.subtle, "digest");
+  const result = await guard(await signed("abc"), testEnv(), () => {});
+  expect(result.ok).toBe(true);
+  expect(digest).toHaveBeenCalledWith("SHA-256", new TextEncoder().encode("abc").buffer);
+});
+
 it("rejects missing headers, forged signers, tampered bodies and stale or future timestamps", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-06T00:00:00Z"));
