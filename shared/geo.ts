@@ -43,10 +43,20 @@ export function offsetPoint(
   bearing: number,
   metres: number,
 ): LatLon {
-  void from;
-  void bearing;
-  void metres;
-  throw new Error("offsetPoint: not implemented");
+  assertPoint(from);
+  if (!Number.isFinite(bearing) || !Number.isFinite(metres) || metres < 0) {
+    throw new RangeError("Expected a finite bearing and non-negative distance");
+  }
+  const lat = from.lat * RADIANS;
+  const angle = bearing * RADIANS;
+  const arc = metres / EARTH_RADIUS_METRES;
+  const sinLat = Math.sin(lat) * Math.cos(arc) + Math.cos(lat) * Math.sin(arc) * Math.cos(angle);
+  const destinationLat = Math.asin(Math.min(1, Math.max(-1, sinLat)));
+  const destinationLon = from.lon + Math.atan2(
+    Math.sin(angle) * Math.sin(arc) * Math.cos(lat),
+    Math.cos(arc) - Math.sin(lat) * Math.sin(destinationLat),
+  ) / RADIANS;
+  return { lat: destinationLat / RADIANS, lon: ((destinationLon + 540) % 360) - 180 };
 }
 
 /** The closest point to `p` on a polyline given as [lon, lat] pairs (OSM/GeoJSON order). */
