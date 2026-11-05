@@ -130,6 +130,18 @@ async function send(what, address, abi, functionName, args) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Retries a read that a lagging RPC node may not answer yet (e.g. a block it hasn't seen). */
+async function retry(fn, tries = 10, delayMs = 3000) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= tries) throw err;
+      await sleep(delayMs);
+    }
+  }
+}
+
 console.log(DRY ? "DRY RUN: nothing will be sent.\n" : "");
 console.log(
   `deployer ${deployer.address}  ${formatEther(await pub.getBalance({ address: deployer.address }))} ETH`,
@@ -210,22 +222,33 @@ for (const { label, years, usesPataRegistry } of NAMES) {
     duration,
     zeroHash,
   ]);
-  await send("commit", ETH_REGISTRAR, registrarAbi, "commit", [commitment]);
+  const commitReceipt = await send("commit", ETH_REGISTRAR, registrarAbi, "commit", [commitment]);
   if (DRY) {
     console.log("  [dry-run] would wait for the commitment to age, then register");
     continue;
   }
 
-  const committedAt = await read(ETH_REGISTRAR, registrarAbi, "commitmentAt", [commitment]);
+  // Public RPCs are load-balanced: a node that hasn't seen the commit's block yet returns 0 for
+  // commitmentAt, and the registrar reports a missing commitment as CommitmentTooOld. So take the commit
+  // time from the receipt's own block, and wait until the node we're talking to has seen it AND it's aged.
+  const { timestamp: committedAt } = await retry(() =>
+    pub.getBlock({ blockNumber: commitReceipt.blockNumber }),
+  );
+  const readyAt = committedAt + minAge;
   process.stdout.write(`  waiting ${minAge} s for the commitment to age`);
   for (;;) {
-    const { timestamp } = await pub.getBlock();
-    if (timestamp > committedAt + minAge) break;
+    const [{ timestamp }, seen] = await Promise.all([
+      pub.getBlock(),
+      read(ETH_REGISTRAR, registrarAbi, "commitmentAt", [commitment]),
+    ]);
+    if (timestamp > readyAt && seen === committedAt) break;
     process.stdout.write(".");
     await sleep(6000);
   }
   console.log("");
-  await send("register", ETH_REGISTRAR, registrarAbi, "register", [
+
+  // A later call can still land on a lagging node, so retry the commitment errors a few times.
+  const registerArgs = [
     label,
     deployer.address,
     secret,
@@ -234,7 +257,31 @@ for (const { label, years, usesPataRegistry } of NAMES) {
     duration,
     MOCK_USDC,
     zeroHash,
-  ]);
+  ];
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const { request } = await pub.simulateContract({
+        account: deployer,
+        address: ETH_REGISTRAR,
+        abi: registrarAbi,
+        functionName: "register",
+        args: registerArgs,
+      });
+      const hash = await wallet.writeContract(request);
+      console.log(`  register: ${hash}`);
+      const receipt = await pub.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") stop(`register reverted (tx ${hash}).`);
+      break;
+    } catch (err) {
+      const reason = revertReason(err);
+      if (attempt < 6 && /^Commitment(TooNew|TooOld)/.test(reason)) {
+        console.log(`  register not ready yet (${reason.split("(")[0]}), retrying in 12 s`);
+        await sleep(12000);
+        continue;
+      }
+      stop(`register failed: ${reason}`);
+    }
+  }
 }
 
 // ---- 4. Checks ----
