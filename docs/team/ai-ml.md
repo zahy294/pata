@@ -16,6 +16,7 @@ Until the owner's guard (P0-6) lands, every route returns 500, so unit-test your
 ## Completion checklist
 
 - [x] P0-4: DIGIPIN encode/decode, reusable vectors, 1,000 seeded round-trips and edge tests; `npm run check` passes. Result: `docs/plans/P0-4.md`.
+- [x] P0-7 geometry: shared distance, bearing, offset, segment snapping and pin-spread tests; `npm run check` passes. Result: `docs/plans/P0-7-geo.md`. Map search, AI and speech remain pending.
 
 ---
 
