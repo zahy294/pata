@@ -1,6 +1,8 @@
 # Secrets: only .env.example is committed
 .env
 .env*.local
+.dev.vars
+server/.dev.vars
 
 # Private prep notes
 handoff.md
@@ -8,3 +10,33 @@ handoff.md
 # Raw research downloads and browser-tool output
 docs/research/sources/
 .playwright-mcp/
+
+# Dependencies
+node_modules/
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Cloudflare Wrangler
+.wrangler/
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/*/31337/
+
+# Tests
+/coverage/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Misc
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
