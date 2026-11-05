@@ -21,9 +21,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function reservedContext(): Promise<RouteContext> {
+async function reservedContext(reserve = true): Promise<RouteContext> {
   const env = testEnv();
-  await env.PATA_KV.put(`register:${env.PATA_REGISTRY_ADDRESS.toLowerCase()}:${owner}`, "sana");
+  if (reserve) await env.PATA_KV.put(`register:${env.PATA_REGISTRY_ADDRESS.toLowerCase()}:${owner}`, "sana");
   return {
     env,
     household: owner,
@@ -41,6 +41,7 @@ function fakeRpc(
   registeredOwner: `0x${string}` = owner,
   failBroadcast = false,
   receiptStatus = "0x1",
+  failGasEstimate = false,
 ) {
   const calls: string[] = [];
   vi.stubGlobal(
@@ -68,7 +69,15 @@ function fakeRpc(
       if (request.method === "eth_getTransactionCount") result = "0x0";
       if (request.method === "eth_blockNumber") result = "0x100";
       if (request.method === "eth_maxPriorityFeePerGas") result = "0x0";
-      if (request.method === "eth_estimateGas") result = "0x30d40";
+      if (request.method === "eth_estimateGas") {
+        if (failGasEstimate)
+          return Response.json({
+            jsonrpc: "2.0",
+            id: request.id,
+            error: { code: -32000, message: "Gas estimation unavailable" },
+          });
+        result = "0x30d40";
+      }
       if (request.method === "eth_getBlockByNumber")
         result = {
           number: "0x100",
@@ -153,13 +162,32 @@ it("clears an available hashless reservation and retries registration once", asy
   expect(calls.filter((call) => call === "eth_sendRawTransaction")).toHaveLength(1);
 });
 
+it("registers another free label after the first attempt failed before broadcast", async () => {
+  const ctx = await reservedContext(false);
+  const firstCalls = fakeRpc(0, owner, false, "0x1", true);
+  expect((await register(ctx)).status).toBe(503);
+  expect(firstCalls).not.toContain("eth_sendRawTransaction");
+  const retryCalls = fakeRpc(0);
+  const response = await register(withLabel(ctx, "fresh"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ txHash: hash });
+  expect(retryCalls.filter((call) => call === "eth_sendRawTransaction")).toHaveLength(1);
+  const registrations = vi.mocked(fetch).mock.calls.flatMap(([, init]) => {
+    const request = JSON.parse(String(init?.body));
+    if (request.method !== "eth_call") return [];
+    const call = decodeFunctionData({ abi, data: request.params[0].data });
+    return call.functionName === "register" ? [call.args[0]] : [];
+  });
+  expect(registrations).toEqual(["fresh"]);
+});
+
 it.each([1])("keeps a reserved label blocked (status %s)", async (status) => {
   const ctx = await reservedContext();
   const calls = fakeRpc(status, resolver);
   const response = await register(ctx);
   expect(response.status).toBe(503);
   expect(calls).not.toContain("eth_sendRawTransaction");
-  fakeRpc(0);
+  fakeRpc(1);
   expect((await register(withLabel(ctx, "fresh"))).status).toBe(503);
 });
 
@@ -199,7 +227,7 @@ it("keeps a successful household registration reserved against a second free lab
   const ctx = await reservedContext();
   fakeRpc(2);
   expect((await register(ctx)).status).toBe(200);
-  const calls = fakeRpc(0);
+  const calls = fakeRpc(2);
   expect((await register(withLabel(ctx, "fresh"))).status).toBe(503);
   expect(calls).not.toContain("eth_sendRawTransaction");
 });

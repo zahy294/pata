@@ -182,12 +182,15 @@ export async function registerHouseholdName(
           if (receipt.status === "reverted") await clearRegistration(env, key);
           if (receipt.status !== "success") throw new Error();
         }
-        if (existing !== label) throw new Error();
-        if (hash) return hash as `0x${string}`;
-        if (status === 2) return null;
-        if (status !== 0) throw new Error();
-        // One retry in this invocation. An uncertain send stays reserved for reconciliation.
-        await reserve(env, key, null);
+        if (!hash && status === 0) {
+          // No registration landed: release the old label before considering a new one.
+          await reserve(env, key, null);
+        } else {
+          if (existing !== label) throw new Error();
+          if (hash) return hash as `0x${string}`;
+          if (status === 2) return null;
+          throw new Error();
+        }
       }
       const status = await publicClient.readContract({
         address: registry,

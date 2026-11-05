@@ -200,16 +200,14 @@ it("registers only one name per household and returns the receipt for a retry", 
   expect(chain.writeContract).toHaveBeenCalledTimes(1);
 });
 
-it("hides registration failures and never broadcasts another name after an uncertain write", async () => {
+it("hides registration failures and permits another label once the old label is confirmed available", async () => {
   const env = testEnv();
   chain.writeContract.mockRejectedValueOnce(new Error("SECRET_RPC_BODY_AND_KEY"));
   await expect(registerHouseholdName(env, "sana", household, resolver, grantRegistry)).rejects.toThrow(
     /^Name registration unavailable$/,
   );
-  await expect(registerHouseholdName(env, "other", household, resolver, grantRegistry)).rejects.toThrow(
-    /^Name registration unavailable$/,
-  );
-  expect(chain.writeContract).toHaveBeenCalledTimes(1);
+  expect(await registerHouseholdName(env, "other", household, resolver, grantRegistry)).toBe(hash);
+  expect(chain.writeContract).toHaveBeenCalledTimes(2);
 });
 
 it("refuses to report a reverted registration as successful", async () => {
