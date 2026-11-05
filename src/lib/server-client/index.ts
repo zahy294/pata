@@ -24,6 +24,7 @@ import {
   ROUTES,
 } from "../../../shared/api";
 import { postAddress } from "./address-call";
+import { postRecording } from "./speech-call";
 
 export async function topup(keys: HouseholdKeys, req: TopupRequest): Promise<TopupResponse> {
   void keys;
@@ -55,10 +56,7 @@ export async function writeDirections(
 }
 
 export async function speechToText(keys: HouseholdKeys, audio: Blob, language: Language): Promise<string> {
-  void keys;
-  void audio;
-  void language;
-  throw new Error("speechToText: not implemented (P0-7)");
+  return postRecording(keys, audio, language);
 }
 
 export async function textToSpeech(
