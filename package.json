@@ -5,8 +5,16 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p server",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:contracts": "forge test --root contracts --no-match-contract Fork",
+    "check": "npm run typecheck && npm run test && npm run test:contracts",
+    "e2e": "playwright test",
+    "server:dev": "npm run dev -w server",
+    "server:deploy": "npm run deploy -w server",
+    "lint": "eslint",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@anon-rpc/browser-harness": "0.4.0",
@@ -21,7 +29,8 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "serwist": "9.5.13",
-    "viem": "2.57.14"
+    "viem": "2.57.14",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
@@ -40,5 +49,8 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "workspaces": [
+    "server"
+  ]
 }

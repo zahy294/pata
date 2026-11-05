@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+contracts/lib
+contracts/out
+contracts/cache
+docs/research/sources
+package-lock.json
+.playwright-mcp
