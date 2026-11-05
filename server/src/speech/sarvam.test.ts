@@ -4,6 +4,63 @@ import { recordingFixture } from "../../../src/lib/server-client/recording-fixtu
 
 afterEach(() => vi.unstubAllGlobals());
 
+it.each(["webm-2.webm", "live-webm-2.webm", "mp4-2.mp4"])(
+  "rejects concatenated container headers in %s",
+  async (name) => {
+    const original = await recordingFixture(name);
+    const concatenated = new ArrayBuffer(original.byteLength * 2);
+    new Uint8Array(concatenated).set(new Uint8Array(original));
+    new Uint8Array(concatenated).set(new Uint8Array(original), original.byteLength);
+    const network = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", network);
+    await expect(
+      transcribe("test-key", concatenated, name.endsWith("webm") ? "audio/webm" : "audio/mp4", "hi"),
+    ).rejects.toThrow(/Invalid or unsupported/);
+    expect(network).not.toHaveBeenCalled();
+  },
+);
+
+it("counts Opus packet duration even when packet timestamps overlap", async () => {
+  const original = Buffer.from(await recordingFixture());
+  const cluster = original.indexOf(Buffer.from([0x1f, 0x43, 0xb6, 0x75]));
+  if (cluster < 0) throw new Error("Expected cluster in streaming fixture");
+  const block = [0xa3, 0x87, 0x81, 0, 0, 0x80, 0xf8, 0xff, 0xfe];
+  const payload = [
+    0x1f,
+    0x43,
+    0xb6,
+    0x75,
+    0xff,
+    0xe7,
+    0x81,
+    0,
+    ...Array.from({ length: 1550 }, () => block).flat(),
+  ];
+  const bytes = new ArrayBuffer(cluster + payload.length);
+  new Uint8Array(bytes).set(original.subarray(0, cluster));
+  new Uint8Array(bytes).set(payload, cluster);
+  const network = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", network);
+  await expect(transcribe("test-key", bytes, "audio/webm", "hi")).rejects.toThrow(/30 seconds/);
+  expect(network).not.toHaveBeenCalled();
+});
+
+it("counts fragmented AAC sample duration even when decode timestamps overlap", async () => {
+  const bytes = await recordingFixture("fragmented-mp4-31.mp4");
+  const buffer = Buffer.from(bytes);
+  let at = buffer.indexOf("tfdt");
+  if (at < 0) throw new Error("Expected fragment decode time");
+  while (at >= 0) {
+    const start = at + 4;
+    buffer.fill(0, start + 4, start + (buffer[start] === 1 ? 12 : 8));
+    at = buffer.indexOf("tfdt", start);
+  }
+  const network = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", network);
+  await expect(transcribe("test-key", bytes, "audio/mp4", "hi")).rejects.toThrow(/30 seconds/);
+  expect(network).not.toHaveBeenCalled();
+});
+
 it("transcribes a short WebM as codemix with the server-only Sarvam key", async () => {
   const bytes = await recordingFixture();
   const network = vi

@@ -44,6 +44,11 @@ function webmSeconds(bytes: Uint8Array): number {
     return value;
   }
   const roots = children(0, bytes.length);
+  if (
+    roots.filter((e) => e.id === 0x1a45dfa3).length !== 1 ||
+    roots.filter((e) => e.id === 0x18538067).length !== 1
+  )
+    throw new Error();
   const header = roots.find((e) => e.id === 0x1a45dfa3);
   const segment = roots.find((e) => e.id === 0x18538067);
   if (!header || !segment) throw new Error();
@@ -51,6 +56,7 @@ function webmSeconds(bytes: Uint8Array): number {
   if (!docType || new TextDecoder().decode(bytes.subarray(docType.start, docType.end)) !== "webm")
     throw new Error();
   const top = children(segment.start, segment.end);
+  if (top.some((e) => e.id === 0x1a45dfa3 || e.id === 0x18538067)) throw new Error();
   const info = top.find((e) => e.id === 0x1549a966);
   let scale = 1_000_000;
   let declared = 0;
@@ -82,6 +88,7 @@ function webmSeconds(bytes: Uint8Array): number {
     throw new Error();
   const track = uint(number);
   let packetEnd = 0;
+  let codedSeconds = 0;
   let packets = 0;
   function block(element: Element, timestamp: number) {
     const number = vint(element.start, element.end);
@@ -104,6 +111,7 @@ function webmSeconds(bytes: Uint8Array): number {
     if (code === 3 && packet + 1 >= element.end) throw new Error();
     const count = code === 0 ? 1 : code === 3 ? bytes[packet + 1] & 63 : 2;
     if (!count || frameMs * count > 120) throw new Error();
+    codedSeconds += (frameMs * count) / 1000;
     packetEnd = Math.max(
       packetEnd,
       ((timestamp + view.getInt16(at)) * scale) / 1e9 + (frameMs * count) / 1000,
@@ -115,6 +123,7 @@ function webmSeconds(bytes: Uint8Array): number {
     let timestamp = 0;
     for (const field of children(element.start, element.end)) {
       if (field.id === 0xe7) timestamp = uint(field);
+      if (field.id === 0x1a45dfa3 || field.id === 0x18538067) throw new Error();
       if (field.id === 0xa3) block(field, timestamp);
       if (field.id === 0xa0)
         for (const item of children(field.start, field.end)) if (item.id === 0xa1) block(item, timestamp);
@@ -125,7 +134,7 @@ function webmSeconds(bytes: Uint8Array): number {
   for (const element of top) if (element.id === 0x1f43b675) cluster(element);
   if (!packets) throw new Error();
   // Conservative coded timeline includes end padding; never trust a shorter header.
-  return Math.max((declared * scale) / 1e9, packetEnd);
+  return Math.max((declared * scale) / 1e9, packetEnd, codedSeconds);
 }
 
 function mp4Seconds(bytes: Uint8Array): number {
@@ -163,6 +172,11 @@ function mp4Seconds(bytes: Uint8Array): number {
     return value;
   }
   const top = boxes(0, bytes.length);
+  if (
+    top.filter((box) => box.type === "ftyp").length !== 1 ||
+    top.filter((box) => box.type === "moov").length !== 1
+  )
+    throw new Error();
   const moov = top.find((box) => box.type === "moov");
   if (
     !top.some((box) => box.type === "ftyp") ||
@@ -199,6 +213,7 @@ function mp4Seconds(bytes: Uint8Array): number {
     if (read(trex, 4) !== trackId) throw new Error();
     const defaultDuration = read(trex, 12);
     let samples = 0;
+    let codedTicks = 0;
     for (const fragment of fragments) {
       const trafs = boxes(fragment.start, fragment.end).filter((box) => box.type === "traf");
       if (trafs.length !== 1) throw new Error();
@@ -211,6 +226,7 @@ function mp4Seconds(bytes: Uint8Array): number {
       const tfdt = child(traf, "tfdt");
       if (bytes[tfdt.start] > 1) throw new Error();
       let cursor = read(tfdt, 4, bytes[tfdt.start] === 1);
+      const firstTick = cursor;
       const runs = boxes(traf.start, traf.end).filter((box) => box.type === "trun");
       if (!runs.length) throw new Error();
       for (const run of runs) {
@@ -233,7 +249,8 @@ function mp4Seconds(bytes: Uint8Array): number {
         }
         if (run.start + at !== run.end) throw new Error();
       }
-      duration = Math.max(duration, cursor);
+      codedTicks += cursor - firstTick;
+      duration = Math.max(duration, cursor, codedTicks);
     }
   }
   const edts = boxes(track.start, track.end).find((box) => box.type === "edts");
