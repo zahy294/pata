@@ -47,3 +47,4 @@ Privacy is the product. Each invariant is a judging claim, so a change that brea
 - AI use: the README's AI-use section says which files and parts AI wrote (an ETHGlobal rule).
 - Hooks in `.claude/hooks/` block destructive git and rm commands, reading `.env` files, literal secrets in edits, and prompts that contain secrets. Ask the user instead of working around a block.
 - Arkiv friction goes in `arkiv/friction.md` as it happens, one line each.
+- The team codes with Codex, which reads `AGENTS.md`; keep its invariants in step with this file. Roles, file ownership and per-role prompts are in `docs/team/`. Screens call `src/lib/flows/*` only; `shared/` is the app–server contract.
