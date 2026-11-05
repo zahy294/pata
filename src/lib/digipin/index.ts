@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 08.04.2025 Department of Posts.
+// Adapted from India Post DIGIPIN v2.0.0 (a15339e8): TypeScript, numeric cell bounds,
+// finite-coordinate validation and Pata display helpers. Licence: ./LICENSE.apache-2.0.
 // DIGIPIN encode and decode: India Post v2.0.0, no hyphens. Plain, tested code (CLAUDE.md invariant).
 // Owner: AI/ML (P0-4). Read docs/research/digipin.md. Write digipin.test.ts first (TDD).
 // The same vectors (vectors.json) are used by the Solidity resolver's tests (P1-1).
@@ -22,8 +26,28 @@ export interface DigipinCell {
 
 /** (lat, lon) → 10-character canonical code, e.g. (28.622788, 77.213033) → "39J49LL8T4". Throws outside the bounds. */
 export function encodeDigipin(point: LatLon): string {
-  void point;
-  throw new Error("encodeDigipin: not implemented (P0-4)");
+  if (!Number.isFinite(point.lat) || point.lat < DIGIPIN_BOUNDS.minLat || point.lat > DIGIPIN_BOUNDS.maxLat) {
+    throw new RangeError("Latitude outside DIGIPIN bounds");
+  }
+  if (!Number.isFinite(point.lon) || point.lon < DIGIPIN_BOUNDS.minLon || point.lon > DIGIPIN_BOUNDS.maxLon) {
+    throw new RangeError("Longitude outside DIGIPIN bounds");
+  }
+  let { minLat, maxLat, minLon, maxLon }: {
+    minLat: number; maxLat: number; minLon: number; maxLon: number;
+  } = DIGIPIN_BOUNDS;
+  let code = "";
+  for (let level = 0; level < 10; level++) {
+    const latStep = (maxLat - minLat) / 4;
+    const lonStep = (maxLon - minLon) / 4;
+    const row = Math.max(0, Math.min(3, 3 - Math.floor((point.lat - minLat) / latStep)));
+    const col = Math.max(0, Math.min(3, Math.floor((point.lon - minLon) / lonStep)));
+    code += DIGIPIN_GRID[row][col];
+    minLat += (3 - row) * latStep;
+    maxLat = minLat + latStep;
+    minLon += col * lonStep;
+    maxLon = minLon + lonStep;
+  }
+  return code;
 }
 
 /** Canonical or lowercase code → its cell. Throws on an invalid code. */
