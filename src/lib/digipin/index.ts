@@ -15,6 +15,8 @@ export const DIGIPIN_GRID = [
   ["L", "M", "P", "T"],
 ] as const;
 
+const DIGIPIN_ALPHABET = DIGIPIN_GRID.flat().join("");
+
 export const DIGIPIN_BOUNDS = { minLat: 2.5, maxLat: 38.5, minLon: 63.5, maxLon: 99.5 } as const;
 
 export interface DigipinCell {
@@ -32,9 +34,10 @@ export function encodeDigipin(point: LatLon): string {
   if (!Number.isFinite(point.lon) || point.lon < DIGIPIN_BOUNDS.minLon || point.lon > DIGIPIN_BOUNDS.maxLon) {
     throw new RangeError("Longitude outside DIGIPIN bounds");
   }
-  let { minLat, maxLat, minLon, maxLon }: {
-    minLat: number; maxLat: number; minLon: number; maxLon: number;
-  } = DIGIPIN_BOUNDS;
+  let minLat: number = DIGIPIN_BOUNDS.minLat;
+  let maxLat: number = DIGIPIN_BOUNDS.maxLat;
+  let minLon: number = DIGIPIN_BOUNDS.minLon;
+  let maxLon: number = DIGIPIN_BOUNDS.maxLon;
   let code = "";
   for (let level = 0; level < 10; level++) {
     const latStep = (maxLat - minLat) / 4;
@@ -50,7 +53,7 @@ export function encodeDigipin(point: LatLon): string {
   return code;
 }
 
-/** Canonical or lowercase code → its cell. Throws on an invalid code. */
+/** Canonical, lowercase or display-spaced code → its cell. Throws on an invalid code. */
 export function decodeDigipin(code: string): DigipinCell {
   if (!isValidDigipin(code)) throw new Error("Invalid DIGIPIN");
   code = code.replace(/ /g, "").toUpperCase();
@@ -58,7 +61,7 @@ export function decodeDigipin(code: string): DigipinCell {
   let minLon: number = DIGIPIN_BOUNDS.minLon;
   let size: number = DIGIPIN_BOUNDS.maxLat - DIGIPIN_BOUNDS.minLat;
   for (const symbol of code) {
-    const index = DIGIPIN_GRID.flat().indexOf(symbol as (typeof DIGIPIN_GRID)[number][number]);
+    const index = DIGIPIN_ALPHABET.indexOf(symbol);
     const row = Math.floor(index / 4);
     const col = index % 4;
     size /= 4;
@@ -79,12 +82,13 @@ export function isValidDigipin(code: string): boolean {
 
 /** "39J49LL8T4" → "39j49ll8t4" (the grid name label, P1-1). */
 export function toGridLabel(code: string): string {
-  void code;
-  throw new Error("toGridLabel: not implemented (P0-4)");
+  if (!isValidDigipin(code)) throw new Error("Invalid DIGIPIN");
+  return code.replace(/ /g, "").toLowerCase();
 }
 
-/** "39J49LL8T4" → "39J 49L L8T4" (3-4-3 with spaces; never hyphens). */
+/** "39J49LL8T4" → "39J 49LL 8T4" (3-4-3 with spaces; never hyphens). */
 export function formatDigipin(code: string): string {
-  void code;
-  throw new Error("formatDigipin: not implemented (P0-4)");
+  if (!isValidDigipin(code)) throw new Error("Invalid DIGIPIN");
+  const canonical = code.replace(/ /g, "").toUpperCase();
+  return `${canonical.slice(0, 3)} ${canonical.slice(3, 7)} ${canonical.slice(7)}`;
 }

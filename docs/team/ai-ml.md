@@ -13,6 +13,10 @@ To run the Worker locally you need `server/.dev.vars` with `ANTHROPIC_API_KEY` a
 
 Until the owner's guard (P0-6) lands, every route returns 500, so unit-test your functions directly with Vitest and mocked `fetch`.
 
+## Completion checklist
+
+- [x] P0-4: DIGIPIN encode/decode, reusable vectors, 1,000 seeded round-trips and edge tests; `npm run check` passes. Result: `docs/plans/P0-4.md`.
+
 ---
 
 ### Prompt 1: DIGIPIN (start now)

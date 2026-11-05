@@ -1,6 +1,6 @@
 // P0-4 (AI/ML). Red-green-refactor: replace each todo with a failing test, then make it pass.
 import { describe, expect, it } from "vitest";
-import { decodeDigipin, encodeDigipin, isValidDigipin } from "./index";
+import { decodeDigipin, encodeDigipin, formatDigipin, isValidDigipin, toGridLabel } from "./index";
 import vectors from "./vectors.json";
 
 describe("digipin", () => {
@@ -9,6 +9,17 @@ describe("digipin", () => {
   });
   it.each(vectors.encode)("encodes $name", ({ lat, lon, code }) => {
     expect(encodeDigipin({ lat, lon })).toBe(code);
+  });
+  it.each(vectors.rejectedUpstream)(
+    "records the corrected code for $name",
+    ({ lat, lon, claimedCode, actualCode }) => {
+      expect(encodeDigipin({ lat, lon })).toBe(actualCode);
+      expect(encodeDigipin({ lat, lon })).not.toBe(claimedCode);
+    },
+  );
+  it("preserves the full-precision Dak Bhawan centre for the resolver", () => {
+    const vector = vectors.decode.find(({ code }) => code === "39J49LL8T4")!;
+    expect(decodeDigipin(vector.code).center).toEqual({ lat: vector.lat, lon: vector.lon });
   });
   it("decodes a code to a numeric cell that contains the original point", () => {
     const cell = decodeDigipin("39J49LL8T4");
@@ -91,5 +102,19 @@ describe("digipin", () => {
   it.each(vectors.invalid)("refuses to decode invalid code %j", (code) => {
     expect(() => decodeDigipin(code)).toThrow("Invalid DIGIPIN");
   });
-  it.todo("toGridLabel lowercases; formatDigipin prints 3-4-3 with spaces");
+  it("returns a canonical lowercase grid label from canonical or display input", () => {
+    expect(toGridLabel("39J49LL8T4")).toBe("39j49ll8t4");
+    expect(toGridLabel(" 39j 49ll 8t4 ")).toBe("39j49ll8t4");
+  });
+  it.each(vectors.invalid)("refuses to make a grid label from %j", (code) => {
+    expect(() => toGridLabel(code)).toThrow("Invalid DIGIPIN");
+  });
+  it("formats uppercase 3-4-3 groups, including lowercase or already spaced input", () => {
+    expect(formatDigipin("39J49LL8T4")).toBe("39J 49LL 8T4");
+    expect(formatDigipin(" 39j 49ll 8t4 ")).toBe("39J 49LL 8T4");
+    expect(formatDigipin(formatDigipin("39J49LL8T4"))).toBe("39J 49LL 8T4");
+  });
+  it.each(vectors.invalid)("refuses to format invalid code %j", (code) => {
+    expect(() => formatDigipin(code)).toThrow("Invalid DIGIPIN");
+  });
 });
