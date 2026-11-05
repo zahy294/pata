@@ -13,10 +13,20 @@ import type {
 import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
 import type { HouseholdState } from "../keys/store";
+import { deriveHouseholdKeys, newRandomRoot } from "../keys";
+import { loadDeviceRoot, saveDeviceRoot } from "../keys/store";
+import { withDeviceLock } from "../keys/device-lock";
 
 /** P0: load the device root or make a new one; P1-3: passkey. */
 export async function signIn(): Promise<HouseholdKeys> {
-  throw new Error("signIn: not implemented (P0-5)");
+  return withDeviceLock("sign-in", async () => {
+    let root = await loadDeviceRoot();
+    if (!root) {
+      root = newRandomRoot();
+      await saveDeviceRoot(root);
+    }
+    return deriveHouseholdKeys(root);
+  });
 }
 
 /** Step 2: spoken (Blob) or typed (string) way to the door → transcript, locality, landmark phrases. */
