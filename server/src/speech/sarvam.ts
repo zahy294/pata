@@ -12,11 +12,13 @@ export async function transcribe(
   audio: ArrayBuffer,
   contentType: string,
   language: Language,
+  beforeUpload?: (seconds: number) => Promise<void>,
 ): Promise<string> {
   const lang = LanguageSchema.parse(language);
   const recording = inspectRecording(audio);
-  if (contentType.split(";")[0].trim().toLowerCase() !== recording.contentType)
+  if (contentType && contentType.split(";")[0].trim().toLowerCase() !== recording.contentType)
     throw new RecordingInputError("Recording format does not match its content type");
+  await beforeUpload?.(recording.seconds);
   try {
     const form = new FormData();
     form.set("file", new Blob([audio], { type: recording.contentType }), `recording.${recording.extension}`);
