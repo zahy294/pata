@@ -13,7 +13,7 @@ import type {
 import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
 import type { HouseholdState } from "../keys/store";
-import { extractAddress, rankLandmarks } from "../server-client";
+import { extractAddress, rankLandmarks, speechToText } from "../server-client";
 
 /** P0: load the device root or make a new one; P1-3: passkey. */
 export async function signIn(): Promise<HouseholdKeys> {
@@ -26,9 +26,9 @@ export async function describeTheWay(
   input: Blob | string,
   language: Language,
 ): Promise<{ wayToTheDoor: string; locality: Locality | null; landmarkPhrases: string[] }> {
-  if (typeof input !== "string") throw new Error("Speech input is not available yet");
-  const parts = await extractAddress(keys, { wayToTheDoor: input, language });
-  return { wayToTheDoor: input, ...parts };
+  const wayToTheDoor = typeof input === "string" ? input : await speechToText(keys, input, language);
+  const parts = await extractAddress(keys, { wayToTheDoor, language });
+  return { wayToTheDoor, ...parts };
 }
 
 /** Step 3–4: candidate pins from the server. Empty candidates → hand-dropped pin. */
