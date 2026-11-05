@@ -1,4 +1,4 @@
-// Arkiv records: four types, each ONE sealed bytes column and nothing public. Owner: blockchain.
+// Arkiv records: four types, sealed bytes columns only. Owner: blockchain.
 // Read docs/research/arkiv.md first. SDK 1.0.0 only: older examples (and AI-written code) use the
 // pre-1.0 payload API. Log every surprise in arkiv/friction.md, one line each.
 //
@@ -9,7 +9,7 @@
 //
 // Every query filters ownedBy(household): anyone can write under our schema tags (arkiv.md Gotcha 2).
 //
-// Decision for the blockchain owner to confirm as ADR 0008: a pata.grant.v1 entity has TWO sealed bytes
+// ADR 0008: a pata.grant.v1 entity has TWO sealed bytes
 // columns (one shared 128 KiB budget): `payload`, sealed to the session key (what the courier opens),
 // and `index`, sealed to the household key ({ grantLabel, requester, purpose, grantEnd }). The payload
 // key isn't known until the batch lands, so the history entry can't carry it; the index lets the
@@ -17,19 +17,38 @@
 // local state. Nothing readable is public either way.
 import type { GrantPayload, HistoryEntry, HomeRecord, Language, LiveGrant } from "../../../shared/domain";
 import type { HouseholdKeys } from "../keys";
+import { ExpirationTime } from "@arkiv-network/sdk";
+import { bytes } from "@arkiv-network/sdk/schema";
+import { hexToBytes } from "viem";
+import { ARKIV_MAX_DAYS } from "../../../shared/constants";
+import { arkivPublicClient, arkivWalletClient } from "../rpc";
+import { openJson, sealJson } from "../seal";
+import { homeSchema } from "./schemas";
 
 export type EntityKey = `0x${string}`;
 
 export async function createHomeRecord(keys: HouseholdKeys, home: HomeRecord): Promise<EntityKey> {
-  void keys;
-  void home;
-  throw new Error("createHomeRecord: not implemented (P0-8)");
+  try {
+    const result = await arkivWalletClient(keys.account).createEntity(
+      homeSchema,
+      { sealed: bytes(await sealJson(keys.sealKey, home)) },
+      { expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS) },
+    );
+    return result.entityKey;
+  } catch {
+    throw new Error("Could not create home record");
+  }
 }
 
 export async function readHomeRecord(keys: HouseholdKeys, key: EntityKey): Promise<HomeRecord> {
-  void keys;
-  void key;
-  throw new Error("readHomeRecord: not implemented (P0-8)");
+  try {
+    const row = await arkivPublicClient().getEntity(key, homeSchema);
+    if (row.$owner.toLowerCase() !== keys.address.toLowerCase())
+      throw new Error("Home record belongs to another household");
+    return await openJson<HomeRecord>(keys.sealKey, hexToBytes(row.sealed.value));
+  } catch {
+    throw new Error("Could not read home record");
+  }
 }
 
 export async function createVoiceRecord(
