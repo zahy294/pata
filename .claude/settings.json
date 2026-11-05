@@ -1,0 +1,36 @@
+{
+  "attribution": { "commit": "", "pr": "", "sessionUrl": false },
+  "permissions": {
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Edit(**/.env)",
+      "Edit(**/.env.local)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-guard.mjs\"" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\"" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/after-edit.mjs\"" }
+        ]
+      }
+    ]
+  }
+}

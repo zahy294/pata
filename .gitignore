@@ -1,0 +1,10 @@
+# Secrets: only .env.example is committed
+.env
+.env*.local
+
+# Private prep notes
+handoff.md
+
+# Raw research downloads and browser-tool output
+docs/research/sources/
+.playwright-mcp/
