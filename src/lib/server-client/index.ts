@@ -16,6 +16,14 @@ import type {
 } from "../../../shared/api";
 import type { Language } from "../../../shared/domain";
 import type { HouseholdKeys } from "../keys";
+import {
+  ExtractRequest as ExtractRequestSchema,
+  ExtractResponse as ExtractResponseSchema,
+  RankRequest as RankRequestSchema,
+  RankResponse as RankResponseSchema,
+  ROUTES,
+} from "../../../shared/api";
+import { postAddress } from "./address-call";
 
 export async function topup(keys: HouseholdKeys, req: TopupRequest): Promise<TopupResponse> {
   void keys;
@@ -30,15 +38,11 @@ export async function registerName(keys: HouseholdKeys, req: RegisterRequest): P
 }
 
 export async function extractAddress(keys: HouseholdKeys, req: ExtractRequest): Promise<ExtractResponse> {
-  void keys;
-  void req;
-  throw new Error("extractAddress: not implemented (P0-7)");
+  return postAddress(keys, ROUTES.addressExtract, ExtractRequestSchema.parse(req), ExtractResponseSchema);
 }
 
 export async function rankLandmarks(keys: HouseholdKeys, req: RankRequest): Promise<RankResponse> {
-  void keys;
-  void req;
-  throw new Error("rankLandmarks: not implemented (P0-7)");
+  return postAddress(keys, ROUTES.addressRank, RankRequestSchema.parse(req), RankResponseSchema);
 }
 
 export async function writeDirections(
