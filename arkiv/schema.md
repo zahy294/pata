@@ -17,4 +17,6 @@ The grant's two columns share one 128 KiB budget. Its household-sealed `index` c
 
 **Writing addresses:** filled in when the demo household exists (README lists them too).
 
+P0-8 live smoke-test writer (2026-11-06, throwaway rather than demo): `0xd9b8a786d6D662b3e0fB3F12D5d0688fE5876175`, verified home and voice round trips. Public entity keys and receipts are in `docs/plans/P0-8-arkiv.md` and `docs/plans/P0-3.md`. The throwaway key was not persisted.
+
 **A query judges can run:** filled in after P0-10.

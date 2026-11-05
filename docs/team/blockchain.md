@@ -11,7 +11,7 @@ You're on the critical path: the first household name on Sepolia is due at **hou
 - [x] P0-8 ENS module: pinned ABIs, roles, names, household deployments and locality update; verified on Sepolia. See `docs/plans/P0-8-ens.md`.
 - [ ] P0-8 ENS end-to-end: owner's `/register`, then verify `getEnsText` through universal resolution (user explicitly deferred registration).
 - [x] P0-8 Arkiv module: four schemas, ADR 0008, sealed home/voice create/read functions and owner/schema/error tests. See `docs/plans/P0-8-arkiv.md`.
-- [ ] P0-8 Arkiv live home round-trip: runner ready; development Rabdi wallet remains unfunded on-chain. Read-only 182/183-day lifetime probes pass.
+- [x] P0-8 Arkiv live home/voice round-trip: real Rabdi create/read, owner/expiry/ciphertext checks and decoded 183-day rejection passed. See `docs/plans/P0-8-arkiv.md` for receipts and evidence.
 - [ ] P0-3 follow-up: repeat with an Arkiv access key on the OnePlus 11 preview; five funded Nox write measurements per chain (deferred by the user until device, preview and funds are ready).
 
 For testing on Sepolia and Rabdi you need your own development wallet (SETUP.md §3), funded from the faucets. Its key goes in your `.env.local` only; Codex must never read or print it. Household keys come from the app itself.
