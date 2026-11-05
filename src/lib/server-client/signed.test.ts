@@ -4,7 +4,7 @@ import { sha256, toHex, verifyMessage } from "viem";
 import { SIGNATURE_HEADERS, signedMessage } from "../../../shared/api";
 import { deriveHouseholdKeys } from "../keys";
 import { topup, registerName } from "./index";
-import { signedPost } from "./signed";
+import { ServerError, signedPost } from "./signed";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -101,4 +101,74 @@ it("drops upstream failures and rejects malformed successful replies", async () 
   await expect(
     registerName(keys, { label: "sana", resolver: keys.address, grantRegistry: keys.address }),
   ).rejects.toThrow(/^Invalid server response$/);
+});
+
+it.each([
+  { status: 503, code: "unavailable", message: "Service paused" },
+  { status: 429, code: "relay_daily_limit", message: "Relay daily top-up limit reached" },
+  { status: 503, code: "relay_unavailable", message: "Name registration unavailable" },
+])("preserves safe server errors ($status/$code)", async ({ status, code, message }) => {
+  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
+  const keys = await deriveHouseholdKeys(new Uint8Array(32).fill(7));
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          { error: message, code, requestBody: "PRIVATE_BODY", stack: "PRIVATE_STACK" },
+          { status },
+        ),
+      ),
+  );
+  await expect(signedPost(keys, "/topup", "{}")).rejects.toMatchObject({
+    name: "ServerError",
+    status,
+    code,
+    message,
+  });
+});
+
+it("retains no extra server fields on ServerError", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
+  const keys = await deriveHouseholdKeys(new Uint8Array(32).fill(7));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        {
+          error: "Service paused",
+          code: "unavailable",
+          requestBody: "PRIVATE_BODY",
+          stack: "PRIVATE_STACK",
+        },
+        { status: 503 },
+      ),
+    ),
+  );
+  const failure = await signedPost(keys, "/topup", "{}").catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(ServerError);
+  expect(JSON.stringify(failure)).not.toContain("PRIVATE_");
+  expect(failure).not.toHaveProperty("cause");
+});
+
+it("preserves status with a fixed fallback for malformed errors and uses status zero for network failure", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
+  const keys = await deriveHouseholdKeys(new Uint8Array(32).fill(7));
+  const network = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", network);
+  for (const body of ["<html>PRIVATE_ERROR_BODY</html>", '{"error":"PRIVATE_TEXT_WITH_NO_CODE"}']) {
+    network.mockResolvedValueOnce(new Response(body, { status: 502 }));
+    await expect(signedPost(keys, "/topup", "{}")).rejects.toMatchObject({
+      status: 502,
+      code: "server_error",
+      message: "Server request failed",
+    });
+  }
+  network.mockRejectedValueOnce(new Error("PRIVATE_NETWORK_URL"));
+  await expect(signedPost(keys, "/topup", "{}")).rejects.toMatchObject({
+    status: 0,
+    code: "network_error",
+    message: "Server request failed",
+  });
 });

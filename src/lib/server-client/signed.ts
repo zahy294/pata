@@ -1,6 +1,18 @@
 import { sha256, toHex } from "viem";
-import { SIGNATURE_HEADERS, signedMessage } from "../../../shared/api";
+import { ErrorResponse, SIGNATURE_HEADERS, signedMessage } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
+
+/** Only HTTP status, a public error code and a plain message; no upstream body/cause. */
+export class ServerError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ServerError";
+  }
+}
 
 /** Shared by JSON and raw-audio calls. `route` includes any query string. */
 export async function signedPost(
@@ -28,10 +40,24 @@ export async function signedPost(
         [SIGNATURE_HEADERS.signature]: signature,
       },
     });
-    if (!response.ok) throw new Error();
+    if (!response.ok) {
+      let code = "server_error";
+      let message = "Server request failed";
+      try {
+        const parsed = ErrorResponse.safeParse(await response.json());
+        if (parsed.success) {
+          code = parsed.data.code;
+          message = parsed.data.error;
+        }
+      } catch {
+        /* Invalid/HTML replies get the fixed fallback, preserving status. */
+      }
+      throw new ServerError(response.status, code, message);
+    }
     return response;
-  } catch {
-    // Never surface a signing, network or server error body to the UI.
-    throw new Error("Server request failed");
+  } catch (failure) {
+    if (failure instanceof ServerError) throw failure;
+    // Never surface signing or network details to the UI. Status 0 means no HTTP reply.
+    throw new ServerError(0, "network_error", "Server request failed");
   }
 }

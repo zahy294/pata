@@ -22,6 +22,7 @@ import {
   TopupResponse as TopupSchema,
 } from "../../../shared/api";
 import { signedPost } from "./signed";
+export { ServerError } from "./signed";
 
 export async function topup(keys: HouseholdKeys, req: TopupRequest): Promise<TopupResponse> {
   const response = await signedPost(keys, ROUTES.topup, JSON.stringify(req));
