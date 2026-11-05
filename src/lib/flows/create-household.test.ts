@@ -172,6 +172,69 @@ it("can retry a failed resolution check without repeating chain writes", async (
   expect(io.registerName).toHaveBeenCalledTimes(1);
 });
 
+it("concurrent create calls and later repeats reuse the same home instead of duplicating writes", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const states = await Promise.all([createHousehold(keys, input), createHousehold(keys, input)]);
+  expect(states[0]).toEqual(states[1]);
+  expect(io.writeContract).toHaveBeenCalledTimes(2);
+  expect(io.createEntity).toHaveBeenCalledTimes(1);
+  await expect(createHousehold(keys, { ...input, roomNumber: "changed" })).rejects.toThrow(
+    "original household details",
+  );
+  expect(io.createEntity).toHaveBeenCalledTimes(1);
+});
+
+it("rechecks a known funding transaction instead of requesting a second top-up after a timeout", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  io.topup.mockResolvedValueOnce({ txHash: "0xaa", balanceWei: "0" });
+  const normalReceipt = io.waitReceipt.getMockImplementation()!;
+  let timedOut = false;
+  io.waitReceipt.mockImplementation(async (request) => {
+    if (request.hash === "0xaa") {
+      if (!timedOut) {
+        timedOut = true;
+        throw new Error("SECRET_RPC_URL");
+      }
+      return { status: "success", logs: [] };
+    }
+    return normalReceipt(request);
+  });
+  await expect(createHousehold(keys, input)).rejects.toThrow("Could not confirm");
+  expect((await createHousehold(keys, input)).name).toBe("sana.pata.eth");
+  expect(io.topup.mock.calls.filter(([, request]) => request.chain === "sepolia")).toHaveLength(1);
+});
+
+it("allows a new registration only after its previous transaction is confirmed reverted", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  io.registerName.mockResolvedValueOnce({ txHash: "0x99" }).mockResolvedValueOnce({ txHash: "0x98" });
+  const normalReceipt = io.waitReceipt.getMockImplementation()!;
+  io.waitReceipt.mockImplementation(async (request) => {
+    if (request.hash === "0x99") return { status: "reverted", logs: [] };
+    if (request.hash === "0x98") return { status: "success", logs: [] };
+    return normalReceipt(request);
+  });
+  await expect(createHousehold(keys, input)).rejects.toThrow("registration transaction reverted");
+  expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
+  expect(io.registerName).toHaveBeenCalledTimes(2);
+  expect(io.writeContract).toHaveBeenCalledTimes(2);
+});
+
+it("does not repeat a top-up request whose response was lost", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  io.topup.mockRejectedValue(new Error("lost funding response"));
+  await expect(createHousehold(keys, input)).rejects.toThrow("Could not fund household");
+  await expect(createHousehold(keys, input)).rejects.toThrow("needs transaction verification");
+  expect(io.topup).toHaveBeenCalledTimes(1);
+});
+
+it("rejects a home larger than Arkiv's sealed bytes budget before requesting funds", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  await expect(createHousehold(keys, { ...input, writtenAddress: "x".repeat(128 * 1024) })).rejects.toThrow(
+    "Home record is too large",
+  );
+  expect(io.topup).not.toHaveBeenCalled();
+});
+
 it("creates a household with progress and seals the complete confirmed home before saving public state", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   const progress: string[] = [];

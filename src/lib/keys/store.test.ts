@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { loadDeviceRoot, loadHouseholdState, saveDeviceRoot, saveHouseholdState } from "./store";
+import {
+  loadDeviceRoot,
+  loadHouseholdState,
+  saveDeviceRoot,
+  saveHouseholdState,
+  loadSetupCheckpoint,
+  saveSetupCheckpoint,
+} from "./store";
 
 describe("device storage outside a browser", () => {
   it("refuses to silently discard writes when IndexedDB is unavailable", async () => {
@@ -17,5 +24,9 @@ describe("device storage outside a browser", () => {
     expect(typeof indexedDB).toBe("undefined");
     expect(await loadDeviceRoot()).toBeNull();
     expect(await loadHouseholdState()).toBeNull();
+    expect(await loadSetupCheckpoint("0x01")).toBeNull();
+    await expect(
+      saveSetupCheckpoint("0x01", { name: "sana.pata.eth", sealedHome: new Uint8Array([1]) }),
+    ).rejects.toThrow("Device storage is unavailable");
   });
 });

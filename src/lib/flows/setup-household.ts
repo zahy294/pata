@@ -26,7 +26,7 @@ import { createHomeRecord } from "../arkiv";
 import { encodeDigipin } from "../digipin";
 import { saveHouseholdState, loadSetupCheckpoint, saveSetupCheckpoint } from "../keys/store";
 import { sealJson, openJson } from "../seal";
-import { ENS, PROVIDER_NAME, RECORD_KEYS } from "../../../shared/constants";
+import { ENS, PROVIDER_NAME, RECORD_KEYS, ARKIV_MAX_BYTES } from "../../../shared/constants";
 
 /** P0: load the device root or make a new one; P1-3: passkey. */
 export async function signIn(): Promise<HouseholdKeys> {
@@ -96,10 +96,10 @@ export interface NewHousehold {
 export type SetupStep =
   "topup-sepolia" | "topup-arkiv" | "deploy" | "register" | "resolve" | "home-record" | "save" | "complete";
 
-async function confirmTransaction(chain: "sepolia" | "arkiv", hash: `0x${string}`): Promise<void> {
+async function confirmTransaction(chain: "sepolia" | "arkiv", hash: `0x${string}`): Promise<boolean> {
   try {
     const client = chain === "sepolia" ? sepoliaPublicClient() : arkivPublicClient();
-    if ((await client.waitForTransactionReceipt({ hash })).status !== "success") throw new Error("Reverted");
+    return (await client.waitForTransactionReceipt({ hash })).status === "success";
   } catch {
     throw new Error("Could not confirm household transaction");
   }
@@ -169,6 +169,9 @@ export async function createHousehold(
       directions: input.directions,
       voiceKeys: input.voiceKeys,
     };
+    // Seal v1 adds one version byte, a 12-byte IV and a 16-byte authentication tag.
+    if (new TextEncoder().encode(JSON.stringify(home)).byteLength + 29 > ARKIV_MAX_BYTES)
+      throw new Error("Home record is too large");
     const checkpoint = (await loadSetupCheckpoint(keys.address)) ?? {
       name,
       sealedHome: await sealJson(keys.sealKey, home),
@@ -186,11 +189,24 @@ export async function createHousehold(
       const field = chain === "sepolia" ? "sepoliaFunded" : "arkivFunded";
       if (checkpoint[field]) continue;
       onProgress(chain === "sepolia" ? "topup-sepolia" : "topup-arkiv");
-      const response = await topup(keys, { chain }).catch(() => {
-        throw new Error(`Could not fund household on ${chain}`);
-      });
-      if (response.txHash) {
-        await confirmTransaction(chain, response.txHash);
+      let fundingHash = checkpoint.fundingHashes?.[chain];
+      if (!fundingHash) {
+        checkpoint.pending = chain === "sepolia" ? "topup-sepolia" : "topup-arkiv";
+        await save();
+        const response = await topup(keys, { chain }).catch(() => {
+          throw new Error(`Could not fund household on ${chain}`);
+        });
+        delete checkpoint.pending;
+        if (response.txHash) {
+          fundingHash = response.txHash;
+          checkpoint.fundingHashes = { ...checkpoint.fundingHashes, [chain]: fundingHash };
+        }
+        await save();
+      }
+      if (fundingHash && !(await confirmTransaction(chain, fundingHash))) {
+        delete checkpoint.fundingHashes?.[chain];
+        await save();
+        throw new Error("Household funding transaction reverted. Retry to request funding again.");
       }
       checkpoint[field] = true;
       await save();
@@ -216,7 +232,11 @@ export async function createHousehold(
         delete checkpoint.pending;
         await save();
       }
-      await confirmTransaction("sepolia", checkpoint.registrationHash);
+      if (!(await confirmTransaction("sepolia", checkpoint.registrationHash))) {
+        delete checkpoint.registrationHash;
+        await save();
+        throw new Error("Household registration transaction reverted. Retry to register again.");
+      }
       checkpoint.registered = true;
       await save();
     }

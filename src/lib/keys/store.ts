@@ -17,13 +17,14 @@ export interface SetupCheckpoint {
   sealedHome: Uint8Array;
   sepoliaFunded?: boolean;
   arkivFunded?: boolean;
+  fundingHashes?: { sepolia?: `0x${string}`; arkiv?: `0x${string}` };
   contracts?: { resolver: `0x${string}`; grantRegistry: `0x${string}` };
   registrationHash?: `0x${string}`;
   registered?: boolean;
   resolved?: boolean;
   homeRecordKey?: `0x${string}`;
   /** A request may have been sent; without a returned result, never blindly replay it. */
-  pending?: "deploy" | "register" | "home-record";
+  pending?: "topup-sepolia" | "topup-arkiv" | "deploy" | "register" | "home-record";
 }
 
 function openDatabase(): Promise<IDBDatabase> {
