@@ -6,6 +6,22 @@ const makeKey = () =>
   crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 
 describe("seal", () => {
+  it("requires 256-bit AES-GCM keys", async () => {
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 128 }, false, [
+      "encrypt",
+      "decrypt",
+    ]);
+    await expect(sealBytes(key, new Uint8Array([42]))).rejects.toThrow("AES-GCM-256");
+    const iv = new Uint8Array(12);
+    const ciphertext = new Uint8Array(
+      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new Uint8Array([42])),
+    );
+    const sealed = new Uint8Array(13 + ciphertext.length);
+    sealed[0] = 1;
+    sealed.set(iv, 1);
+    sealed.set(ciphertext, 13);
+    await expect(openBytes(key, sealed)).rejects.toThrow("AES-GCM-256");
+  });
   it("rejects unknown versions and truncated envelopes", async () => {
     const key = await makeKey();
     const sealed = await sealBytes(key, new Uint8Array([42]));

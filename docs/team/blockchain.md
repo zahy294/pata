@@ -4,6 +4,11 @@ You own keys, encryption, the one Anon-RPC module, ENS, Arkiv, the grant flows a
 
 You're on the critical path: the first household name on Sepolia is due at **hour 10 (Fri 07:00)**. Post "Unblocks: …" in the team chat each time a function the others wait on works.
 
+## Completion checklist
+
+- [x] P0-5 keys and seal: device root and household state storage, deterministic household/grant identities with frozen vectors, AES-GCM-256 round trips and rejection tests. See `docs/plans/P0-5.md`.
+- [ ] P0-5 RPC: Nox clients and hour-0 tests (Prompt 2).
+
 For testing on Sepolia and Rabdi you need your own development wallet (SETUP.md §3), funded from the faucets. Its key goes in your `.env.local` only; Codex must never read or print it. Household keys come from the app itself.
 
 The owner registers `pata.eth` (P0-2) and posts `NEXT_PUBLIC_PATA_REGISTRY` in the chat; put it in your `.env.local`. The owner's Worker does `/topup` and `/register`.
