@@ -19,13 +19,14 @@ import { HOUSEHOLD_NAME_ROLES } from "../../../src/lib/ens/roles";
 
 const registryAbi = parseAbi([
   "function getStatus(uint256 anyId) view returns (uint8)",
+  "function getOwner(uint256 anyId) view returns (address)",
   "function register(string label, address owner, address registry, address resolver, uint256 roleBitmap, uint64 expiry) returns (uint256)",
 ]);
 const factoryAbi = parseAbi(["function verifyContract(address proxy) view returns (address)"]);
 
 const localValues = new WeakMap<
   Env["PATA_KV"],
-  Map<string, { value: string; expires: number; written: number }>
+  Map<string, { value: string | null; expires: number; written: number }>
 >();
 async function readReservation(env: Env, key: string): Promise<string | null> {
   const entries = localValues.get(env.PATA_KV);
@@ -34,11 +35,12 @@ async function readReservation(env: Env, key: string): Promise<string | null> {
   entries?.delete(key);
   return env.PATA_KV.get(key);
 }
-async function reserve(env: Env, key: string, value: string, ttl?: number): Promise<void> {
+async function reserve(env: Env, key: string, value: string | null, ttl?: number): Promise<void> {
   const lastWrite = localValues.get(env.PATA_KV)?.get(key)?.written ?? -Infinity;
   const delay = lastWrite + 1000 - Date.now();
   if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-  await env.PATA_KV.put(key, value, ttl ? { expirationTtl: ttl } : undefined);
+  if (value === null) await env.PATA_KV.delete(key);
+  else await env.PATA_KV.put(key, value, ttl ? { expirationTtl: ttl } : undefined);
   let entries = localValues.get(env.PATA_KV);
   if (!entries) {
     entries = new Map();
@@ -136,7 +138,7 @@ export async function registerHouseholdName(
   owner: `0x${string}`,
   resolver: `0x${string}`,
   grantRegistry: `0x${string}`,
-): Promise<`0x${string}`> {
+): Promise<`0x${string}` | null> {
   try {
     if (!HOUSEHOLD_LABEL_PATTERN.test(label)) throw new Error();
     return await withKvLock(env, "relay:sepolia", async () => {
@@ -147,14 +149,38 @@ export async function registerHouseholdName(
       if (existing !== null) {
         if (existing !== label) throw new Error();
         const hash = await readReservation(env, `${key}:hash`);
-        if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error();
-        const receipt = await publicClient.waitForTransactionReceipt({
-          hash: hash as `0x${string}`,
-          timeout: 90000,
-          pollingInterval: 4000,
-        });
-        if (receipt.status !== "success") throw new Error();
-        return hash as `0x${string}`;
+        if (!hash) {
+          const id = BigInt(labelhash(label));
+          const status = await publicClient.readContract({
+            address: registry,
+            abi: registryAbi,
+            functionName: "getStatus",
+            args: [id],
+          });
+          if (status === 2) {
+            const registeredOwner = await publicClient.readContract({
+              address: registry,
+              abi: registryAbi,
+              functionName: "getOwner",
+              args: [id],
+            });
+            if (registeredOwner.toLowerCase() !== owner.toLowerCase()) throw new Error();
+            return null;
+          }
+          if (status !== 0) throw new Error();
+          // One retry in this invocation. A new uncertain send stays reserved for the next
+          // request to reconcile; never recurse or broadcast repeatedly here.
+          await reserve(env, key, null);
+        } else {
+          if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error();
+          const receipt = await publicClient.waitForTransactionReceipt({
+            hash: hash as `0x${string}`,
+            timeout: 90000,
+            pollingInterval: 4000,
+          });
+          if (receipt.status !== "success") throw new Error();
+          return hash as `0x${string}`;
+        }
       }
       const status = await publicClient.readContract({
         address: registry,
@@ -182,8 +208,8 @@ export async function registerHouseholdName(
         functionName: "register",
         args: [label, owner, grantRegistry, resolver, HOUSEHOLD_NAME_ROLES, FOREVER_EXPIRY],
       });
-      // Permanent intent prevents another name after an uncertain broadcast. If no hash is
-      // saved, the owner must reconcile on-chain before clearing this KV reservation.
+      // Preserve the intent across uncertain broadcasts. A later request reconciles a
+      // missing hash against registry ownership/availability before retrying once.
       await reserve(env, key, label);
       const txHash = await wallet.writeContract(request);
       await reserve(env, `${key}:hash`, txHash);

@@ -8,6 +8,9 @@ export function testEnv(): Env {
     put: async (key: string, value: string) => {
       values.set(key, value);
     },
+    delete: async (key: string) => {
+      values.delete(key);
+    },
   };
   return {
     ANTHROPIC_API_KEY: "",

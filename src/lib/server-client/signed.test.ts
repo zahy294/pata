@@ -51,6 +51,15 @@ it("registerName posts the deployment addresses and parses the transaction hash"
   expect(JSON.parse(String(network.mock.calls[0][1]?.body))).toEqual(request);
 });
 
+it("accepts ownership-confirmed registration success without a saved hash", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
+  const keys = await deriveHouseholdKeys(new Uint8Array(32).fill(7));
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json({ txHash: null })));
+  expect(
+    await registerName(keys, { label: "sana", resolver: keys.address, grantRegistry: keys.address }),
+  ).toEqual({ txHash: null });
+});
+
 it("signs raw audio bytes and binds the speech language query", async () => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   const keys = await deriveHouseholdKeys(new Uint8Array(32).fill(7));
