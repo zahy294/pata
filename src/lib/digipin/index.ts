@@ -52,14 +52,29 @@ export function encodeDigipin(point: LatLon): string {
 
 /** Canonical or lowercase code → its cell. Throws on an invalid code. */
 export function decodeDigipin(code: string): DigipinCell {
-  void code;
-  throw new Error("decodeDigipin: not implemented (P0-4)");
+  if (!isValidDigipin(code)) throw new Error("Invalid DIGIPIN");
+  code = code.replace(/ /g, "").toUpperCase();
+  let minLat: number = DIGIPIN_BOUNDS.minLat;
+  let minLon: number = DIGIPIN_BOUNDS.minLon;
+  let size: number = DIGIPIN_BOUNDS.maxLat - DIGIPIN_BOUNDS.minLat;
+  for (const symbol of code) {
+    const index = DIGIPIN_GRID.flat().indexOf(symbol as (typeof DIGIPIN_GRID)[number][number]);
+    const row = Math.floor(index / 4);
+    const col = index % 4;
+    size /= 4;
+    minLat += (3 - row) * size;
+    minLon += col * size;
+  }
+  return {
+    center: { lat: minLat + size / 2, lon: minLon + size / 2 },
+    southWest: { lat: minLat, lon: minLon },
+    northEast: { lat: minLat + size, lon: minLon + size },
+  };
 }
 
 /** `^[23456789CJKLMPFT]{10}$` after uppercasing and removing spaces. */
 export function isValidDigipin(code: string): boolean {
-  void code;
-  throw new Error("isValidDigipin: not implemented (P0-4)");
+  return /^[23456789CJKLMPFT]{10}$/.test(code.replace(/ /g, "").toUpperCase());
 }
 
 /** "39J49LL8T4" → "39j49ll8t4" (the grid name label, P1-1). */
