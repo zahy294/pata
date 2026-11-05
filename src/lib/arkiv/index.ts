@@ -22,8 +22,8 @@ import { bytes } from "@arkiv-network/sdk/schema";
 import { hexToBytes } from "viem";
 import { ARKIV_MAX_DAYS } from "../../../shared/constants";
 import { arkivPublicClient, arkivWalletClient } from "../rpc";
-import { openJson, sealJson } from "../seal";
-import { homeSchema } from "./schemas";
+import { openJson, sealJson, openBytes, sealBytes } from "../seal";
+import { homeSchema, voiceSchema } from "./schemas";
 
 export type EntityKey = `0x${string}`;
 
@@ -56,16 +56,28 @@ export async function createVoiceRecord(
   language: Language,
   mp3: Uint8Array,
 ): Promise<EntityKey> {
-  void keys;
+  // Language is already associated with this entity key in the sealed home record.
   void language;
-  void mp3;
-  throw new Error("createVoiceRecord: not implemented (P0-9)");
+  try {
+    const result = await arkivWalletClient(keys.account).createEntity(
+      voiceSchema,
+      { sealed: bytes(await sealBytes(keys.sealKey, mp3)) },
+      { expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS) },
+    );
+    return result.entityKey;
+  } catch {
+    throw new Error("Could not create voice record");
+  }
 }
 
 export async function readVoiceRecord(keys: HouseholdKeys, key: EntityKey): Promise<Uint8Array> {
-  void keys;
-  void key;
-  throw new Error("readVoiceRecord: not implemented (P0-10)");
+  try {
+    const row = await arkivPublicClient().getEntity(key, voiceSchema);
+    if (row.$owner.toLowerCase() !== keys.address.toLowerCase()) throw new Error("Wrong owner");
+    return await openBytes(keys.sealKey, hexToBytes(row.sealed.value));
+  } catch {
+    throw new Error("Could not read voice record");
+  }
 }
 
 /** One batch: the payload (sealed to the session key, expires at grantEnd) + an "issued" history entry. */

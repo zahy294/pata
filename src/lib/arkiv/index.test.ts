@@ -1,9 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { createPublicClient } from "@arkiv-network/sdk";
-import { custom, type Hex } from "viem";
+import { custom, toHex, type Hex } from "viem";
+import { sealJson, sealBytes } from "../seal";
 import type { HomeRecord } from "../../../shared/domain";
 import { deriveHouseholdKeys } from "../keys";
-import { createHomeRecord, readHomeRecord } from "./index";
+import { createHomeRecord, readHomeRecord, createVoiceRecord, readVoiceRecord } from "./index";
 
 const network = vi.hoisted(() => ({ createEntity: vi.fn(), request: vi.fn() }));
 vi.mock("../rpc", () => ({
@@ -81,7 +82,13 @@ it("a household can create and read its encrypted home for 182 days", async () =
 
 it("rejects another owner's home before attempting decryption", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
-  network.request.mockResolvedValue(rpcRow("0x0000000000000000000000000000000000000001"));
+  network.request.mockResolvedValue(
+    rpcRow(
+      "0x0000000000000000000000000000000000000001",
+      "pata.home.v1",
+      toHex(await sealJson(keys.sealKey, home)),
+    ),
+  );
   await expect(readHomeRecord(keys, key)).rejects.toThrow(/^Could not read home record$/);
 });
 
@@ -101,3 +108,52 @@ it("home create never exposes SDK request details on failure", async () => {
   network.createEntity.mockRejectedValue(new Error("SECRET_URL_AND_REQUEST_BODY"));
   await expect(createHomeRecord(keys, home)).rejects.toThrow(/^Could not create home record$/);
 });
+
+it("a household can round-trip an encrypted MP3 without public language metadata", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const mp3 = new TextEncoder().encode("ID3-private-test-audio-731");
+  network.createEntity.mockImplementation(async (schema, values, options) => {
+    expect(schema.name).toBe("pata.voice.v1");
+    expect(Object.keys(values)).toEqual(["sealed"]);
+    expect(options.expiration).toMatchObject({ minLifetime: 7_862_400n, expiresAt: 0n });
+    expect(Buffer.from(values.sealed.value.slice(2), "hex").includes(Buffer.from(mp3))).toBe(false);
+    network.request.mockResolvedValue(rpcRow(keys.address, schema.name, values.sealed.value));
+    return { entityKey: key };
+  });
+  expect(await createVoiceRecord(keys, "hi", mp3)).toBe(key);
+  expect(await readVoiceRecord(keys, key)).toEqual(mp3);
+});
+
+it("rejects voice ciphertext from another owner even if it opens with the household key", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  network.request.mockResolvedValue(
+    rpcRow(
+      "0x0000000000000000000000000000000000000001",
+      "pata.voice.v1",
+      toHex(await sealBytes(keys.sealKey, new Uint8Array([1, 2, 3]))),
+    ),
+  );
+  await expect(readVoiceRecord(keys, key)).rejects.toThrow(/^Could not read voice record$/);
+});
+
+it("voice create never exposes SDK request details on failure", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  network.createEntity.mockRejectedValue(new Error("SECRET_URL_AND_REQUEST_BODY"));
+  await expect(createVoiceRecord(keys, "en", new Uint8Array([1, 2, 3]))).rejects.toThrow(
+    /^Could not create voice record$/,
+  );
+});
+
+it.each(["wrong schema", "missing", "network error", "damaged ciphertext"])(
+  "a voice read reports a safe error for %s",
+  async (failure) => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    if (failure === "wrong schema")
+      network.request.mockResolvedValue(rpcRow(keys.address, "untrusted.voice"));
+    else if (failure === "missing") network.request.mockResolvedValue(null);
+    else if (failure === "damaged ciphertext")
+      network.request.mockResolvedValue(rpcRow(keys.address, "pata.voice.v1", "0x010203"));
+    else network.request.mockRejectedValue(new Error("SECRET_URL_AND_REQUEST_BODY"));
+    await expect(readVoiceRecord(keys, key)).rejects.toThrow(/^Could not read voice record$/);
+  },
+);
