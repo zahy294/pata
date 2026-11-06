@@ -17,3 +17,10 @@
   - No-permission path: the location message offers the landmark field; `/address/rank` answered 200 in 9 s and showed candidates.
   - A pasted "400 017" first became "40001": `maxLength` cut it before the space was stripped. Fixed by keeping the first 6 digits.
 - Not yet done: a phone run through to saving.
+
+## Follow-up: fill the area and PIN code from the location (ADR 0012)
+
+- `scripts/build-locality-table.mjs` builds `src/lib/locality/mumbai.json` from two Overpass extracts: 192 suburbs, 174 PIN codes, 6,335 cells.
+- `nearestLocality` (pure, tested) and `suggestLocality` (flow, loads the table lazily). The screen fills only empty fields and says so.
+- Leave-one-out on the table's own cells: 5 voters within 1.5 km were right 86% of the time (1 voter: 83%).
+- Playwright with faked fixes: Dharavi → "Dharavi, 400017"; BKC with an area already typed keeps it and fills 400051; Delhi fills nothing. No outside request in any of the three.

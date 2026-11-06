@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { describeTypedAddress, locateHome, locateHomeError, LocateError } from "./setup-household";
+import {
+  describeTypedAddress,
+  locateHome,
+  locateHomeError,
+  LocateError,
+  suggestLocality,
+} from "./setup-household";
 
 const fields = {
   localityName: "  Dharavi  ",
@@ -91,5 +97,28 @@ describe("locateHomeError", () => {
     expect(new Set(sentences).size).toBe(reasons.length);
     for (const sentence of sentences) expect(sentence).toMatch(/landmark/);
     expect(locateHomeError(new Error("raw"))).toBe(locateHomeError(new LocateError("unavailable")));
+  });
+});
+
+describe("suggestLocality", () => {
+  it("suggests the area and PIN code for a Mumbai fix from the bundled table, with no network", async () => {
+    const network = vi.fn();
+    vi.stubGlobal("fetch", network);
+    try {
+      await expect(suggestLocality({ lat: 19.0421, lon: 72.8538 })).resolves.toEqual({
+        name: "Dharavi",
+        pinCode: "400017",
+      });
+      expect(network).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("suggests nothing outside Mumbai", async () => {
+    await expect(suggestLocality({ lat: 28.6139, lon: 77.209 })).resolves.toEqual({
+      name: null,
+      pinCode: null,
+    });
   });
 });

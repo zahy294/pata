@@ -2,7 +2,8 @@
 // Set up a household (P0-7, P0-8, P0-9). Owner: frontend; logic in src/lib/flows/setup-household.ts.
 // Steps:
 // 1. Sign in (device root / passkey) → flows.signIn().
-// 2. "Where is your home?": optional "Use my current location" (flows.locateHome), typed area, PIN code,
+// 2. "Where is your home?": optional "Use my current location" (flows.locateHome, then flows.suggestLocality
+//    fills an empty area and PIN code on the device, ADR 0012), typed area, PIN code,
 //    nearby landmark and how to find the door (flows.describeTypedAddress, no model call), and a separate
 //    "Room or flat number" ("Stays on this phone"). No voice recorder (ADR 0010).
 // 3. With a location fix, PinPicker starts a hand-dropped pin there and there's no landmark search.
@@ -67,6 +68,7 @@ export default function SetupPage() {
   const [homeFix, setHomeFix] = useState<flows.HomeFix | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
+  const [filledFromLocation, setFilledFromLocation] = useState(false);
   const [describeError, setDescribeError] = useState<string | null>(null);
   const [wayToTheDoor, setWayToTheDoor] = useState("");
   const [locality, setLocality] = useState<Locality | null>(null);
@@ -165,7 +167,15 @@ export default function SetupPage() {
     setLocating(true);
     setLocateError(null);
     try {
-      setHomeFix(await flows.locateHome());
+      const fix = await flows.locateHome();
+      setHomeFix(fix);
+      // Fill only the empty fields, looked up on this phone; the household checks them (ADR 0012).
+      const suggested = await flows.suggestLocality(fix.pin);
+      const name = localityName.trim() ? null : suggested.name;
+      const code = pinCode.trim() ? null : suggested.pinCode;
+      if (name) setLocalityName(name);
+      if (code) setPinCode(code);
+      if (name || code) setFilledFromLocation(true);
     } catch (failure) {
       setHomeFix(null);
       setLocateError(flows.locateHomeError(failure));
@@ -425,7 +435,7 @@ export default function SetupPage() {
             </button>
             <p className="mt-2 text-[11px] leading-relaxed text-[#6E655A]">
               {homeFix
-                ? `Within about ${Math.round(homeFix.accuracyMetres)} m. You'll move the pin onto your door next.`
+                ? `Within about ${Math.round(homeFix.accuracyMetres)} m.${filledFromLocation ? " We filled in what we could from it, on this phone: check the area and PIN code." : ""} You'll move the pin onto your door next.`
                 : "Best when you're at home. Your location never goes to map search; you'll move the pin onto your door next."}
             </p>
             {locateError && (

@@ -13,6 +13,7 @@ import type {
 } from "../../../shared/domain";
 import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
+import type { LocalityTable, SuggestedLocality } from "../locality/nearest";
 import type { HouseholdState, SetupCheckpoint } from "../keys/store";
 import { LANGUAGES } from "../../../shared/domain";
 import { distanceMetres } from "../../../shared/geo";
@@ -189,6 +190,22 @@ export async function locateHome(
   if (!(pin.lat >= minLat && pin.lat <= maxLat && pin.lon >= minLon && pin.lon <= maxLon))
     throw new LocateError("outside");
   return { pin, accuracyMetres: position.coords.accuracy };
+}
+
+/**
+ * Step 2, after locateHome: a suggested area and PIN code for the fix, looked up on the device from a
+ * bundled Mumbai table (ADR 0012), so the position goes nowhere. Nulls outside Mumbai or on failure.
+ */
+export async function suggestLocality(pin: LatLon): Promise<SuggestedLocality> {
+  try {
+    const [{ nearestLocality }, { default: table }] = await Promise.all([
+      import("../locality/nearest"),
+      import("../locality/mumbai.json"),
+    ]);
+    return nearestLocality(table as unknown as LocalityTable, pin);
+  } catch {
+    return { name: null, pinCode: null };
+  }
 }
 
 /** A plain sentence for a failed locateHome; the typed landmark is always the way forward. */
