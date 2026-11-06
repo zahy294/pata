@@ -1,4 +1,4 @@
-import { GRANT_LATENCY_MARGIN_SECONDS } from "../../../shared/constants";
+import { GRANT_LATENCY_MARGIN_SECONDS, ARKIV_MAX_DAYS } from "../../../shared/constants";
 import type { GrantPayload, GrantRequest, HomeRecord } from "../../../shared/domain";
 import { LANGUAGES } from "../../../shared/domain";
 
@@ -9,6 +9,7 @@ export function calculateGrantEnd(sepoliaTimestamp: number, durationSeconds: num
     sepoliaTimestamp < 0 ||
     !Number.isSafeInteger(durationSeconds) ||
     durationSeconds <= 0 ||
+    durationSeconds + GRANT_LATENCY_MARGIN_SECONDS > ARKIV_MAX_DAYS * 86_400 ||
     !Number.isSafeInteger(end)
   )
     throw new Error("Invalid grant duration");

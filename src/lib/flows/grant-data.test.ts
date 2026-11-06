@@ -31,6 +31,10 @@ it.each([0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER])(
   },
 );
 
+it("rejects a duration beyond the supported Arkiv lifetime before approval can send writes", () => {
+  expect(() => calculateGrantEnd(1_800_000_000, 183 * 86_400)).toThrow("Invalid grant duration");
+});
+
 it("builds only the requested language's payload and base64 audio, without voice entity keys", () => {
   expect(buildGrantPayload(home, request, new Uint8Array([0, 1, 2, 255]), 1_800_000_050)).toEqual({
     version: 1,
