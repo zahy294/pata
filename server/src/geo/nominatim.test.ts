@@ -43,10 +43,43 @@ describe("localityBBox", () => {
   it.each([
     { rows: [{ ...reply[0], type: "postcode", addresstype: "postcode" }] },
     { rows: [{ ...reply[0], address: { postcode: "999999" } }] },
-  ])("does not use postcode-only or mismatched results", async ({ rows }) => {
+  ])("does not use postcode-only or mismatched results as the locality", async ({ rows }) => {
     const { kv } = memoryCache();
-    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json(rows)));
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(rows))
+        .mockResolvedValueOnce(Response.json([])),
+    );
     await expect(localityBBox(kv, locality)).resolves.toBeNull();
+  });
+  it("falls back to a small box around the PIN code's centre when 'area, PIN' finds nothing", async () => {
+    const { kv } = memoryCache();
+    const network = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json([]))
+      .mockResolvedValueOnce(Response.json([{ lat: "19.0607", lon: "72.8648", type: "postcode" }]));
+    vi.stubGlobal("fetch", network);
+    const bbox = await localityBBox(kv, { name: "Bandra Kurla Complex", pinCode: "400051" });
+    expect(bbox).toEqual([72.8648 - 0.012, 19.0607 - 0.012, 72.8648 + 0.012, 19.0607 + 0.012]);
+    const second = new URL(String(network.mock.calls[1][0]));
+    expect(second.searchParams.get("postalcode")).toBe("400051");
+    expect(second.searchParams.get("countrycodes")).toBe("in");
+    expect(second.searchParams.get("q")).toBeNull();
+  });
+  it("also falls back when OSM files the area under a different PIN code", async () => {
+    const { kv } = memoryCache();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json([{ ...reply[0], address: { postcode: "400098" } }]))
+        .mockResolvedValueOnce(Response.json([{ lat: "19.0607", lon: "72.8648" }])),
+    );
+    await expect(localityBBox(kv, { name: "Bandra Kurla Complex", pinCode: "400051" })).resolves.toHaveLength(
+      4,
+    );
   });
   it.each([
     { rows: { error: "private server detail" } },
@@ -79,7 +112,7 @@ describe("localityBBox", () => {
     );
     const work = Promise.all([
       localityBBox(kv, locality),
-      localityBBox(kv, { name: "BKC", pinCode: "400051" }),
+      localityBBox(kv, { name: "Dharavi Koliwada", pinCode: "400017" }),
     ]);
     // Drain async hashing before advancing the request timer.
     await vi.waitFor(() => expect(starts.length).toBeGreaterThanOrEqual(1));
@@ -101,7 +134,7 @@ describe("localityBBox", () => {
   });
   it("returns null when no locality was found", async () => {
     const { kv } = memoryCache();
-    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json([])));
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async () => Response.json([])));
     await expect(localityBBox(kv, locality)).resolves.toBeNull();
   });
   it("searches only the locality and converts Nominatim's coordinate order", async () => {

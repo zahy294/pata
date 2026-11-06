@@ -30,6 +30,14 @@ const rowsSchema = z.array(
     address: z.object({ postcode: z.string().optional() }).optional(),
   }),
 );
+const postcodeRowsSchema = z.array(
+  z.object({
+    lat: numericString.pipe(z.number().min(-90).max(90)),
+    lon: numericString.pipe(z.number().min(-180).max(180)),
+  }),
+);
+/** Half the side of the search box around a PIN code's centre: 0.012° ≈ 1.3 km. */
+const PIN_BOX_DEGREES = 0.012;
 
 export async function localityBBox(
   kv: GeoCache,
@@ -39,27 +47,31 @@ export async function localityBBox(
   const name = locality.name.normalize("NFKC").trim().replace(/\s+/g, " ");
   if (!name || name.length > 80 || !/^\d{6}$/.test(locality.pinCode)) throw new Error("Invalid locality");
   const endpoint = options.nominatimUrl ?? "https://nominatim.openstreetmap.org/search";
-  const key = await geoCacheKey("locality", `${endpoint}|${name.toLowerCase()}|${locality.pinCode}`);
+  // v2: v1 cached "not found" for 30 days before the PIN-centre fallback existed.
+  const key = await geoCacheKey("locality", `v2|${endpoint}|${name.toLowerCase()}|${locality.pinCode}`);
+  const search = async (params: Record<string, string>): Promise<unknown> => {
+    const url = new URL(endpoint);
+    url.search = new URLSearchParams({
+      countrycodes: "in",
+      format: "jsonv2",
+      limit: "1",
+      ...params,
+    }).toString();
+    await paceGeo(kv, "nominatim");
+    const response = await fetch(url.toString(), {
+      headers: { "User-Agent": GEO_USER_AGENT },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error();
+    return response.json();
+  };
   return queuedGeo(kv, "nominatim", async () => {
     try {
       const cached = await kv.get(key);
       if (cached !== null) return z.union([bboxSchema, z.null()]).parse(JSON.parse(cached));
-      const url = new URL(endpoint);
-      url.search = new URLSearchParams({
-        q: `${name}, ${locality.pinCode}`,
-        countrycodes: "in",
-        format: "jsonv2",
-        limit: "1",
-        addressdetails: "1",
-        featureType: "settlement",
-      }).toString();
-      await paceGeo(kv, "nominatim");
-      const response = await fetch(url.toString(), {
-        headers: { "User-Agent": GEO_USER_AGENT },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!response.ok) throw new Error();
-      const row = rowsSchema.parse(await response.json())[0];
+      const row = rowsSchema.parse(
+        await search({ q: `${name}, ${locality.pinCode}`, addressdetails: "1", featureType: "settlement" }),
+      )[0];
       let bbox: BBox | null = null;
       if (
         row &&
@@ -69,6 +81,19 @@ export async function localityBBox(
       ) {
         const [south, north, west, east] = row.boundingbox;
         bbox = bboxSchema.parse([west, south, east, north]);
+      }
+      if (!bbox) {
+        // OSM's Indian postcodes are patchy (BKC is filed under 400098, not 400051), so "area, PIN" often
+        // finds nothing. Fall back to the PIN's centre: Nominatim's own postcode box is a fixed ~10 km
+        // square, too big for a landmark search, so search a ~2.6 km box around the centre instead.
+        const centre = postcodeRowsSchema.parse(await search({ postalcode: locality.pinCode }))[0];
+        if (centre)
+          bbox = bboxSchema.parse([
+            centre.lon - PIN_BOX_DEGREES,
+            centre.lat - PIN_BOX_DEGREES,
+            centre.lon + PIN_BOX_DEGREES,
+            centre.lat + PIN_BOX_DEGREES,
+          ]);
       }
       await kv.put(key, JSON.stringify(bbox), { expirationTtl: GEO_CACHE_SECONDS });
       return bbox;
