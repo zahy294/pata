@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="forest" x1="16" y1="8" x2="111" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#235E35"/><stop offset="1" stop-color="#103D24"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="40" y1="23" x2="93" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D1AD58"/><stop offset="1" stop-color="#AC8436"/>
+    </linearGradient>
+    <clipPath id="tile"><rect width="128" height="128" rx="31"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="128" height="128" fill="url(#forest)"/>
+    <path d="M-9 76C12 48 30 64 49 75S78 84 94 67s26-14 44-13v82H-9Z" fill="#28613A"/>
+    <path d="M-8 79c22-13 37 5 50 20s32 1 48-2 27 10 46 7v32H-8Z" fill="#1B4C2D"/>
+    <path d="M-8 99c23-21 35 9 59 12s33-12 49-7 27 11 36 5v27H-8Z" fill="#164227"/>
+    <path d="M-6 76c23-22 36 0 58 5s29-2 42-15 29-14 40-10M-5 100c22-20 35 8 57 11s30-13 47-7 26 10 34 5" stroke="#367044" stroke-opacity=".5"/>
+    <g transform="translate(34 23) scale(.95)">
+      <path d="M20 58C15 51 5 42 5 29a27 27 0 0 1 54 0c0 13-10 22-15 29" stroke="url(#brass)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M24 47V18h12a10 10 0 0 1 0 20H24" stroke="#C6A24C" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M32 51c-8 0-14 6-14 13 0 5 7 12 11 15a5 5 0 0 0 6 0c4-3 11-10 11-15 0-7-6-13-14-13Z" fill="#BE9843"/>
+      <path d="M32 59a4 4 0 0 0-2 7l-1 6h6l-1-6a4 4 0 0 0-2-7Z" fill="#164427"/>
+    </g>
+    <rect x=".5" y=".5" width="127" height="127" rx="30.5" stroke="#437747" stroke-opacity=".45"/>
+  </g>
+</svg>

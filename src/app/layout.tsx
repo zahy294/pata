@@ -7,7 +7,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Pata",
   description: "Your door, shared only by consent.",
-  icons: { icon: { url: "/pata-mark.svg", type: "image/svg+xml" } },
+  icons: {
+    icon: { url: "/pata-app-icon.svg", type: "image/svg+xml" },
+    apple: "/icons/pata-192.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               aria-label="Pata home"
               className="flex items-center gap-2.5 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#046A38]"
             >
-              <Image src="/pata-mark.svg" alt="" width={32} height={40} priority />
+              <Image src="/pata-app-icon.svg" alt="" width={40} height={40} priority />
               <span className="font-serif text-3xl font-bold tracking-tight text-[#1F1C18]">Pata</span>
               <span className="rounded-md bg-[#EFE5D4] px-2 py-0.5 text-xs font-medium text-[#5C5346]">
                 पता

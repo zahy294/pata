@@ -11,8 +11,11 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Your door, shared only by consent.",
     start_url: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#ffffff",
-    icons: [],
+    background_color: "#FAF5EC",
+    theme_color: "#123B2B",
+    icons: [
+      { src: "/icons/pata-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/icons/pata-512.png", sizes: "512x512", type: "image/png" },
+    ],
   };
 }
