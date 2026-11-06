@@ -131,7 +131,30 @@ it("opens the grant's audio entity once and reuses it while the page polls", asy
     sessionKey: new Uint8Array(32),
   }));
   io.request.mockImplementation(async ({ params }) => (params[0] === audioKey ? audioRow : grantRow));
-  expect(await checkCourierLink("fragment")).toMatchObject({ state: "live", audio: clip });
+  // The door shows at once; the clip arrives on a later poll and is then reused.
+  expect(await checkCourierLink("fragment")).toMatchObject({ state: "live", audio: null });
+  await vi.waitFor(async () =>
+    expect(await checkCourierLink("fragment")).toMatchObject({ state: "live", audio: clip }),
+  );
   expect(await checkCourierLink("fragment")).toMatchObject({ state: "live", audio: clip });
   expect(io.request.mock.calls.filter(([request]) => request.params[0] === audioKey)).toHaveLength(1);
+});
+it("shows the door even when the clip read never finishes", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const identity = await deriveGrantIdentity(new Uint8Array(32));
+  const payloadKey: Hex = `0x${"14".repeat(32)}`;
+  const audioKey: Hex = `0x${"78".repeat(32)}`;
+  const grantRow = {
+    ...rpcRow(keys.address, toHex(await sealJson(identity.sealKey, { ...payload, audioKey }))),
+    key: payloadKey,
+  };
+  io.parse.mockImplementation(() => ({
+    householdName: "home.pata.eth",
+    payloadKey,
+    sessionKey: new Uint8Array(32),
+  }));
+  io.request.mockImplementation(({ params }) =>
+    params[0] === audioKey ? new Promise(() => {}) : Promise.resolve(grantRow),
+  );
+  expect(await checkCourierLink("fragment")).toMatchObject({ state: "live", payload, audio: null });
 });

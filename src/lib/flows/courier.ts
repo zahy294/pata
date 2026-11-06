@@ -21,7 +21,35 @@ export type CourierView =
   | { state: "ended"; locality: Locality | null }
   | { state: "invalid" };
 
-const audioByPayload = new Map<string, Uint8Array | null>();
+/** Per payload: the clip once read (null: no clip), or the read in flight. Cleared when the link ends. */
+const audioByPayload = new Map<string, { value?: Uint8Array | null; loading?: Promise<void> }>();
+
+/**
+ * The clip (up to 128 KiB) loads in the background, so a slow read through the mixnet never hides the
+ * door: on a phone over mobile data on 2026-11-06 it kept the whole view on "checking" for 15 minutes.
+ * Returns the clip once read, else null (the page polls again and the AudioPlayer picks it up).
+ */
+function backgroundAudio(
+  payloadKey: string,
+  audioKey: `0x${string}`,
+  sealKey: CryptoKey,
+  owner: `0x${string}`,
+): Uint8Array | null {
+  const entry = audioByPayload.get(payloadKey) ?? {};
+  audioByPayload.set(payloadKey, entry);
+  if (entry.value !== undefined) return entry.value;
+  entry.loading ??= readGrantAudio(audioKey, sealKey, owner)
+    .then((clip) => {
+      entry.value = clip;
+    })
+    .catch(() => {
+      /* An RPC failure is retried on the next poll. */
+    })
+    .finally(() => {
+      entry.loading = undefined;
+    });
+  return null;
+}
 
 /** One check of both signals. The /c page calls it on load and on a timer. */
 export async function checkCourierLink(fragmentOrStored: string): Promise<CourierView> {
@@ -56,18 +84,12 @@ export async function checkCourierLink(fragmentOrStored: string): Promise<Courie
     const opened = await readGrantPayload(link.payloadKey, identity.sealKey, owner);
     if (!opened) return ended();
     const { audioKey } = opened.payload;
-    // An RPC failure throws (→ checking) and is retried; a missing clip is remembered as null.
-    if (!audioByPayload.has(link.payloadKey))
-      audioByPayload.set(
-        link.payloadKey,
-        audioKey && /^0x[\da-fA-F]{64}$/.test(audioKey)
-          ? await readGrantAudio(audioKey, identity.sealKey, owner)
-          : null,
-      );
-    const audio = audioByPayload.get(link.payloadKey) ?? null;
-    return locality
-      ? { state: "live", locality, payload: opened.payload, audio }
-      : { state: "checking", locality };
+    const audio =
+      audioKey && /^0x[\da-fA-F]{64}$/.test(audioKey)
+        ? backgroundAudio(link.payloadKey, audioKey, identity.sealKey, owner)
+        : null;
+    // The sealed payload carries the same locality, so a failed public lookup can't hide the door.
+    return { state: "live", locality: locality ?? opened.payload.locality, payload: opened.payload, audio };
   } catch {
     return { state: "checking", locality };
   } finally {
