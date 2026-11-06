@@ -20,10 +20,10 @@ import type { HouseholdKeys } from "../keys";
 import { ExpirationTime } from "@arkiv-network/sdk";
 import { bytes } from "@arkiv-network/sdk/schema";
 import { hexToBytes } from "viem";
-import { ARKIV_MAX_DAYS } from "../../../shared/constants";
+import { ARKIV_MAX_DAYS, ARKIV_MAX_BYTES } from "../../../shared/constants";
 import { arkivPublicClient, arkivWalletClient } from "../rpc";
 import { openJson, sealJson, openBytes, sealBytes } from "../seal";
-import { homeSchema, voiceSchema } from "./schemas";
+import { homeSchema, voiceSchema, grantSchema, historySchema } from "./schemas";
 import { canonicalJson, findSealedRecord } from "./reuse";
 
 export type EntityKey = `0x${string}`;
@@ -98,12 +98,60 @@ export async function createGrantBatch(
   sessionSealKey: CryptoKey,
   payload: GrantPayload,
   issued: HistoryEntry,
+  supersededHistoryKey?: EntityKey,
 ): Promise<{ payloadKey: EntityKey; historyKey: EntityKey }> {
-  void keys;
-  void sessionSealKey;
-  void payload;
-  void issued;
-  throw new Error("createGrantBatch: not implemented (P0-10)");
+  try {
+    if (
+      issued.kind !== "issued" ||
+      issued.grantEnd !== payload.grantEnd ||
+      issued.purpose !== payload.purpose ||
+      canonicalJson(issued.requester) !== canonicalJson(payload.requester) ||
+      !/^[a-z2-7]{8}$/.test(issued.grantLabel) ||
+      !Number.isSafeInteger(payload.grantEnd) ||
+      payload.grantEnd <= issued.at
+    )
+      throw new Error("Invalid grant batch");
+    const index = {
+      grantLabel: issued.grantLabel,
+      requester: issued.requester,
+      purpose: issued.purpose,
+      grantEnd: issued.grantEnd,
+    };
+    const [sealedPayload, sealedIndex, sealedHistory] = await Promise.all([
+      sealJson(sessionSealKey, payload),
+      sealJson(keys.sealKey, index),
+      sealJson(keys.sealKey, issued),
+    ]);
+    if (sealedPayload.length + sealedIndex.length > ARKIV_MAX_BYTES || sealedHistory.length > ARKIV_MAX_BYTES)
+      throw new Error("Grant batch exceeds bytes budget");
+    const result = await arkivWalletClient(keys.account).executeBatch({
+      creates: [
+        {
+          schema: grantSchema,
+          values: { payload: bytes(sealedPayload), index: bytes(sealedIndex) },
+          expiration: ExpirationTime.atDate(new Date(payload.grantEnd * 1000)),
+        },
+        {
+          schema: historySchema,
+          values: { sealed: bytes(sealedHistory) },
+          expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS),
+          flags: { readonly: true },
+        },
+      ],
+      ...(supersededHistoryKey ? { deletes: [{ entityKey: supersededHistoryKey }] } : {}),
+    });
+    const [payloadKey, historyKey] = result.createdEntities;
+    if (
+      result.createdEntities.length !== 2 ||
+      !/^0x[\da-fA-F]{64}$/.test(payloadKey) ||
+      !/^0x[\da-fA-F]{64}$/.test(historyKey) ||
+      payloadKey === historyKey
+    )
+      throw new Error("Incomplete grant batch receipt");
+    return { payloadKey, historyKey };
+  } catch {
+    throw new Error("Could not create grant batch");
+  }
 }
 
 /** Courier view. Null when missing, expired or deleted. Also returns the entity's $owner for the check. */
