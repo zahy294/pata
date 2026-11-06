@@ -65,7 +65,7 @@ async function worker(work, options = {}) {
           return;
         }
       }
-      response.writeHead(valid ? 400 : 401);
+      response.writeHead(valid ? (options.signedStatus ?? 400) : 401);
       response.end();
     } catch {
       response.writeHead(500);
@@ -100,6 +100,35 @@ test("default checks verify authentication/CORS with no valid model request or r
     assert.ok(requests.every((request) => ["/health", "/address/rank"].includes(request.path)));
     assert.ok(!result.stdout.includes(posts[1].headers["x-pata-signature"]));
   });
+});
+
+test("501 passes signature acceptance with a note that rank is not deployed", async () => {
+  await worker(
+    async (url) => {
+      const result = await run(["--url", url]);
+      assert.equal(result.code, 0, result.stdout + result.stderr);
+      const lines = result.stdout.trim().split("\n");
+      assert.equal(lines.length, 7);
+      assert.ok(lines.every((line) => line.startsWith("PASS ")));
+      assert.equal(lines[5], "PASS signed invalid body: signature accepted; /address/rank not deployed yet");
+    },
+    { signedStatus: 501 },
+  );
+});
+
+test("other signed-invalid-body statuses still fail, including auth and shutdown errors", async () => {
+  for (const status of [200, 401, 403, 503]) {
+    await worker(
+      async (url) => {
+        const result = await run(["--url", url]);
+        assert.equal(result.code, 1);
+        const lines = result.stdout.trim().split("\n");
+        assert.equal(lines.length, 7);
+        assert.equal(lines[5], `FAIL signed invalid body: expected HTTP 400, got ${status}`);
+      },
+      { signedStatus: status },
+    );
+  }
 });
 
 test("rank is opt-in, signed, and prints only candidate count, landmark names and timing", async () => {
