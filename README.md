@@ -11,7 +11,7 @@ Built at ETHGlobal Mumbai (Classic track, Nov 5–7, 2026).
 - **App:** https://pata.pata-ggr.workers.dev (built for phones; use mobile data, see [Known limitations](#known-limitations))
 - **Server:** https://pata-server.pata-ggr.workers.dev (`/health`)
 
-1. **Set up a home:** `/setup`. Tap **Use my current location**, or type a nearby landmark, then type the area, 6-digit PIN code and how to find your door. Type the room number separately; it never leaves the phone unencrypted. Move the pin onto your door on the map, check the directions in three languages, choose a name, then save (about 2 minutes).
+1. **Set up a home:** `/setup`. Tap **Use my current location**, or type a nearby landmark. In Mumbai, the location fills in the area and PIN code on the phone; check them, then type how to find your door. Type the room number separately; it never leaves the phone unencrypted. Move the pin onto your door on the map, check the directions in three languages, choose a name, then save (about 2 minutes).
 2. **Share the door:** home → **Share a courier link**. Make a test request with a requester, purpose, language and duration (20 seconds for the stage demo), then approve. Share the link or QR code.
 3. **Open it as the courier:** on another phone, open the link. You'll see the locality at once, then the door. When the grant ends, the page switches to "This link has ended" and shows only the locality.
 4. **Look up a name:** `/lookup`. Any household name shows only its locality.
@@ -45,7 +45,7 @@ courier phone ──Anon-RPC (Nox mixnet)──▶ ENS liveness check ──▶ 
 - **Open source:** MIT ([LICENSE](LICENSE)). India Post's DIGIPIN code keeps its [Apache-2.0 notice](src/lib/digipin/LICENSE.apache-2.0). Map data is © OpenStreetMap contributors (ODbL).
 - **Privacy:**
   - **Encrypted:** the exact door, DIGIPIN, written address, directions and room number are stored only encrypted.
-  - **What the providers see:** Claude sees the typed way to the door (area, landmark, how to find the door) and the directions written from it. The phone's text-to-speech reads the directions, and Android may use Google's online voice if the language's voice isn't installed. Map search sees only the locality and the landmark name, and nothing when the phone's location places the pin. The room number never leaves the phone unencrypted.
+  - **What the providers see:** Claude sees the typed way to the door (area, landmark, how to find the door) and the directions written from it. The phone's text-to-speech reads the directions, and Android may use Google's online voice if the language's voice isn't installed. Map search sees only the locality and the landmark name, and nothing when the phone's location places the pin. The area and PIN code suggested from the location come from a table bundled in the app, so the position goes nowhere ([ADR 0012](docs/adr/0012-locality-suggested-on-the-device.md)). The room number never leaves the phone unencrypted.
   - **What stays visible on chain:** label names, owners, schema tags and timing.
   - **Who sees IPs:** the Worker sees the household's signing address and IP. Map tiles come from OpenFreeMap, which sees the area being viewed.
 - **Security:** keys are derived with HKDF from a device root and kept in browser storage (passkey-derived keys are P1-3). Page JavaScript can use the keys; device storage isn't a secure enclave. Courier links are bearer secrets.
@@ -107,6 +107,7 @@ Arkiv write-ups: [why Arkiv](arkiv/why-arkiv.md), [how we use it](arkiv/how-you-
 
 - **Some Wi-Fi networks block Anon-RPC.** If lookups or the courier page stall, switch to mobile data. After a few failed checks, the courier page says so.
 - **Landmark pins appear mostly in Dharavi and BKC.** Overpass often refuses requests from Cloudflare, so other areas usually get the hand-dropped pin, placed by a tap on the map. When "area, PIN" isn't in OpenStreetMap, the search uses the PIN code's own area.
+- **Area and PIN code suggestions cover Mumbai only.** They come from OpenStreetMap (© OpenStreetMap contributors, ODbL), and about one in seven may be the neighbouring PIN code, so the screen asks you to check them.
 - **No voice input:** setup takes a typed address ([ADR 0011](docs/adr/0011-setup-takes-a-typed-address-and-the-phone-location.md)). The phone reads the directions aloud in Hindi, Marathi and English, if it has the voice.
 - **Map tiles** come from OpenFreeMap, not yet the bundled extract, so the tile host sees the area viewed.
 - **There's no IPFS pin yet** ([ADR 0001](docs/adr/0001-stable-host-plus-ipfs-pin.md)).
