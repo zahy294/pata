@@ -8,6 +8,7 @@ import {
   saveSetupCheckpoint,
   loadRevocationCheckpoint,
   saveRevocationCheckpoint,
+  listUnfinishedRevocations,
 } from "./store";
 
 describe("device storage outside a browser", () => {
@@ -28,6 +29,7 @@ describe("device storage outside a browser", () => {
     expect(await loadHouseholdState()).toBeNull();
     expect(await loadSetupCheckpoint("0x01")).toBeNull();
     expect(await loadRevocationCheckpoint("0x01", "0x02")).toBeNull();
+    expect(await listUnfinishedRevocations("0x01")).toEqual([]);
     await expect(
       saveRevocationCheckpoint("0x01", "0x02", { sealedHistory: new Uint8Array([1]) }),
     ).rejects.toThrow("Device storage is unavailable");

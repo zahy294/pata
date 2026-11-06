@@ -159,3 +159,23 @@ test("an aborted write rejects and leaves the previous root intact", async ({ pa
   });
   expect(result).toEqual({ rejected: true, root: Array(32).fill(7) });
 });
+
+test("lists only this household's unfinished stops, so a reload can finish them", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const moduleUrl = "/store.js";
+    const store = await import(moduleUrl);
+    const mine = "0xAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaa";
+    const other = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const unfinished = "0x" + "12".repeat(32);
+    const finished = "0x" + "34".repeat(32);
+    await store.saveRevocationCheckpoint(mine, unfinished, { sealedHistory: new Uint8Array([1, 2]) });
+    await store.saveRevocationCheckpoint(mine, finished, { sealedHistory: new Uint8Array([3]), complete: true });
+    await store.saveRevocationCheckpoint(other, unfinished, { sealedHistory: new Uint8Array([4]) });
+    const listed = await store.listUnfinishedRevocations(mine);
+    return listed.map((item: { payloadKey: string; checkpoint: { sealedHistory: Uint8Array } }) => ({
+      payloadKey: item.payloadKey,
+      bytes: Array.from(item.checkpoint.sealedHistory),
+    }));
+  });
+  expect(result).toEqual([{ payloadKey: "0x" + "12".repeat(32), bytes: [1, 2] }]);
+});

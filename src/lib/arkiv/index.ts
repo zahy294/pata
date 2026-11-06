@@ -271,7 +271,9 @@ export async function listLiveGrants(keys: HouseholdKeys, householdName?: string
   try {
     const name = householdName ?? (await loadHouseholdState())?.name;
     if (!name) throw new Error("Household name required");
-    const grants: LiveGrant[] = [];
+    // A refreshed deadline (approve-grant.ts) leaves the first payload under the same label until it
+    // expires: show each label once, with its later deadline, and read its ENS status once.
+    const byLabel = new Map<string, LiveGrant>();
     for (let offset = 0; ; offset += 100) {
       const page = await arkivPublicClient()
         .select({ $key: true, $owner: true, index: true })
@@ -297,20 +299,65 @@ export async function listLiveGrants(keys: HouseholdKeys, householdName?: string
         } catch {
           continue;
         }
-        if ((await grantStatusByName(`${index.grantLabel}.${name}`)).live)
-          grants.push({ ...index, payloadKey: row.$key });
+        const seen = byLabel.get(index.grantLabel);
+        if (!seen || index.grantEnd > seen.grantEnd) byLabel.set(index.grantLabel, { ...index, payloadKey: row.$key });
       }
       if (page.entities.length + page.skipped < 100) break;
     }
+    const grants: LiveGrant[] = [];
+    for (const grant of byLabel.values())
+      if ((await grantStatusByName(`${grant.grantLabel}.${name}`)).live) grants.push(grant);
     return grants.sort((a, b) => a.grantEnd - b.grantEnd);
   } catch {
     throw new Error("Could not list live grants");
   }
 }
 
+function isHistoryEntry(value: unknown): value is HistoryEntry {
+  const entry = value as HistoryEntry | null;
+  return (
+    !!entry &&
+    entry.version === 1 &&
+    (entry.kind === "issued" || entry.kind === "revoked") &&
+    typeof entry.grantLabel === "string" &&
+    /^[a-z2-7]{8}$/.test(entry.grantLabel) &&
+    typeof entry.requester?.displayName === "string" &&
+    (entry.requester.ensName === undefined || typeof entry.requester.ensName === "string") &&
+    typeof entry.purpose === "string" &&
+    Number.isSafeInteger(entry.at) &&
+    Number.isSafeInteger(entry.grantEnd)
+  );
+}
+
+/** The household's history entries (P1-2), in query order. Only its own rows that open with its key. */
 export async function listHistory(keys: HouseholdKeys): Promise<HistoryEntry[]> {
-  void keys;
-  throw new Error("listHistory: not implemented (P1-2)");
+  try {
+    const entries: HistoryEntry[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await arkivPublicClient()
+        .select({ $key: true, $owner: true, sealed: true })
+        .from(historySchema)
+        .ownedBy(keys.address)
+        .orderBy(asc("$key"))
+        .limit(100)
+        .offset(offset)
+        .fetch();
+      for (const row of page.entities) {
+        if (row.$owner.toLowerCase() !== keys.address.toLowerCase()) continue;
+        try {
+          const entry = await openJson<unknown>(keys.sealKey, hexToBytes(row.sealed.value));
+          if (isHistoryEntry(entry)) entries.push(entry);
+        } catch {
+          /* Anyone can write under our schema tag; a row that won't open isn't ours. */
+        }
+      }
+      if (page.entities.length + page.skipped < 100) break;
+    }
+    return entries;
+  } catch {
+    // Never an empty list on failure: "no history" and "couldn't read it" must look different.
+    throw new Error("Could not read history");
+  }
 }
 
 /** Sign-in upkeep (P1-8): extend home, voice and history records with < 90 days left. */

@@ -3,7 +3,7 @@ import { createPublicClient } from "@arkiv-network/sdk";
 import { custom, toHex, type Hex } from "viem";
 import { deriveHouseholdKeys, deriveGrantIdentity } from "../keys";
 import { sealJson } from "../seal";
-import { readGrantPayload, deleteGrantPayload, createHistoryEntry, listLiveGrants } from "./index";
+import { readGrantPayload, deleteGrantPayload, createHistoryEntry, listLiveGrants, listHistory } from "./index";
 import { openJson } from "../seal";
 import { hexToBytes } from "viem";
 const io = vi.hoisted(() => ({
@@ -18,9 +18,9 @@ vi.mock("../rpc", () => ({
   sepoliaPublicClient: () => io,
 }));
 const key: Hex = `0x${"12".repeat(32)}`;
-function row(owner: Hex, values: Record<string, Hex>, schema = "pata.grant.v1") {
+function row(owner: Hex, values: Record<string, Hex>, schema = "pata.grant.v1", entityKey: Hex = key) {
   return {
-    key,
+    key: entityKey,
     owner,
     creator: owner,
     createdAt: "0x1",
@@ -151,4 +151,64 @@ it("opens a session payload only for the expected household owner", async () => 
     payload,
     owner: keys.address,
   });
+});
+
+it("shows a grant once when a refreshed deadline left two payloads under one label", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const older = { grantLabel: "abcdefgh", requester: { displayName: "Courier" }, purpose: "Delivery", grantEnd: 2000 };
+  const newer = { ...older, grantEnd: 2050 };
+  const newerKey: Hex = `0x${"34".repeat(32)}`;
+  io.request.mockResolvedValue({
+    data: [
+      row(keys.address, { index: toHex(await sealJson(keys.sealKey, older)), payload: "0x" }),
+      row(keys.address, { index: toHex(await sealJson(keys.sealKey, newer)), payload: "0x" }, "pata.grant.v1", newerKey),
+    ],
+    blockNumber: "0x1",
+  });
+  io.readContract.mockResolvedValue("0x1111111111111111111111111111111111111111");
+  expect(await listLiveGrants(keys, "home.pata.eth")).toEqual([{ ...newer, payloadKey: newerKey }]);
+  expect(io.readContract).toHaveBeenCalledOnce();
+});
+
+const issued = {
+  version: 1,
+  kind: "issued",
+  grantLabel: "abcdefgh",
+  requester: { displayName: "Chai Kart", ensName: "chai-kart.pata.eth" },
+  purpose: "Order #4821",
+  at: 1000,
+  grantEnd: 1020,
+} as const;
+
+it("reads the household's own sealed history across pages, skipping foreign, unreadable and malformed rows", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const stranger = await deriveHouseholdKeys(new Uint8Array(32).fill(7));
+  const revoked = { ...issued, kind: "revoked", at: 1010 } as const;
+  const seal = async (value: unknown, sealKey = keys.sealKey) => toHex(await sealJson(sealKey, value));
+  const firstPage = [
+    row(keys.address, { sealed: await seal(issued) }, "pata.history.v1"),
+    row(stranger.address, { sealed: await seal(issued, stranger.sealKey) }, "pata.history.v1"),
+    row(keys.address, { sealed: await seal(issued, stranger.sealKey) }, "pata.history.v1"),
+    row(keys.address, { sealed: await seal({ ...issued, kind: "shared" }) }, "pata.history.v1"),
+    row(keys.address, { sealed: "0x00" }, "pata.history.v1"),
+  ];
+  while (firstPage.length < 100) firstPage.push(row(keys.address, { sealed: "0x00" }, "pata.history.v1"));
+  io.request.mockImplementation(async ({ params }) => {
+    expect(params[0]).toContain("pata.history.v1");
+    expect(params[0].toLowerCase()).toContain(keys.address.toLowerCase());
+    return {
+      data:
+        params[1].offset === "0x0"
+          ? firstPage
+          : [row(keys.address, { sealed: await seal(revoked) }, "pata.history.v1")],
+      blockNumber: "0x1",
+    };
+  });
+  expect(await listHistory(keys)).toEqual([issued, revoked]);
+});
+
+it("never turns a failed history query into an empty history", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  io.request.mockRejectedValue(new Error("https://arkiv.test/secret-key body=private"));
+  await expect(listHistory(keys)).rejects.toThrow(/^Could not read history$/);
 });

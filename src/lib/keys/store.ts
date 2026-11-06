@@ -40,6 +40,38 @@ export async function saveRevocationCheckpoint(
   );
 }
 
+/**
+ * Stops this household started but didn't finish, keyed by payload. Once ENS access has ended the grant
+ * drops off the live list, so this is the only way back to its unfinished Arkiv cleanup after a reload.
+ */
+export async function listUnfinishedRevocations(
+  address: `0x${string}`,
+): Promise<{ payloadKey: `0x${string}`; checkpoint: RevocationCheckpoint }[]> {
+  if (typeof indexedDB === "undefined") return [];
+  const prefix = `revoke:${address.toLowerCase()}:`;
+  const range = IDBKeyRange.bound(prefix, `${prefix}￿`);
+  const db = await openDatabase();
+  try {
+    const [keys, values] = await new Promise<[IDBValidKey[], RevocationCheckpoint[]]>((resolve, reject) => {
+      const tx = db.transaction("household", "readonly");
+      const store = tx.objectStore("household");
+      const keyRequest = store.getAllKeys(range);
+      const valueRequest = store.getAll(range);
+      tx.oncomplete = () => resolve([keyRequest.result, valueRequest.result]);
+      tx.onabort = tx.onerror = () => reject(new Error("Device storage operation failed"));
+    });
+    return keys.flatMap((key, i) => {
+      const payloadKey = String(key).slice(prefix.length);
+      const checkpoint = values[i];
+      return /^0x[\da-f]{64}$/.test(payloadKey) && checkpoint && !checkpoint.complete
+        ? [{ payloadKey: payloadKey as `0x${string}`, checkpoint }]
+        : [];
+    });
+  } finally {
+    db.close();
+  }
+}
+
 /** A setup journal holds exact-address input only inside household-sealed bytes. */
 export interface SetupCheckpoint {
   name: string;
