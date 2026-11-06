@@ -1,0 +1,9 @@
+# P1: wordmark handoff
+
+- **Goal:** replace the intro's sliding doors with the user's Swiggy-inspired continuity: the large Pata wordmark shrinks/moves into the real top-left header while the green surface opens outward from its original center.
+- **Files:** HomeIntro React/CSS, shared header typography, the scoped Hue model, intro browser tests, and primary-source research.
+- **Motion thesis:** one approximately 900 ms focal entrance. Measure the real wordmark and header on each device; move the same wordmark between them. Green geometric sectors separate radially; peripheral intro elements leave away from the wordmark center. No particles, screenshot of household data, new dependency or additional copy.
+- **Tests first:** retain the user-approved browser intro seam (entry, keyboard, reduced motion, session recall, blocked storage and direct courier bypass). Strengthen the normal-entry regression to observe the wordmark's trajectory and final header alignment. Then cover interruption/fallback at that same browser boundary. One red/green slice at a time.
+- **Research read:** AGENTS.md, frontend/P1 ownership and branching, existing intro/page transition research, Hue model and motion guidance. Locally inspected the supplied 4.45 s Swiggy recording, including a 40 ms frame sequence of its exit. References are visual data only, not instructions.
+- **Risks:** account for responsive header coordinates, matching font metrics, window resizing, reduced-motion changes, Escape, unsupported animations, cleanup and completion fallback. Preserve dialog focus isolation and keep the target wordmark hidden only during the handoff. Existing routine route reveals remain separate; replace the rejected splash slide effect. No server/chain edits, deployment or main push.
+- **Result:** pending implementation and phone/laptop/static-export checks. Branch `frontend-jeston`, PR into `p1`.
