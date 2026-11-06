@@ -228,11 +228,16 @@ export async function createHousehold(
         const registration = await registerName(keys, { label: input.label, ...contracts }).catch(() => {
           throw new Error("Could not register household name");
         });
-        checkpoint.registrationHash = registration.txHash;
+        // The relay can confirm existing ownership without a saved transaction hash.
+        // Universal owner/locality resolution below remains mandatory in this case.
+        checkpoint.registrationHash = registration.txHash ?? undefined;
         delete checkpoint.pending;
         await save();
       }
-      if (!(await confirmTransaction("sepolia", checkpoint.registrationHash))) {
+      if (
+        checkpoint.registrationHash &&
+        !(await confirmTransaction("sepolia", checkpoint.registrationHash))
+      ) {
         delete checkpoint.registrationHash;
         await save();
         throw new Error("Household registration transaction reverted. Retry to register again.");

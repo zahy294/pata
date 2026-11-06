@@ -3,9 +3,22 @@
 // the hour-0 gas test. One top-up per household per chain per 10 minutes (KV). Direct RPC is allowed
 // here (our server's own transactions). Validate with TopupRequest; reply TopupResponse.
 import type { RouteHandler } from "../env";
-import { notImplemented } from "../http";
+import { error, json } from "../http";
+import { TopupRequest } from "../../../shared/api";
+import { RelayDailyLimitError, topUp } from "../chain/relay";
 
 export const topup: RouteHandler = async (ctx) => {
-  void ctx;
-  return notImplemented("POST /topup");
+  let input;
+  try {
+    input = TopupRequest.parse(JSON.parse(new TextDecoder().decode(ctx.body)));
+  } catch {
+    return error(400, "invalid_request", "Invalid top-up request");
+  }
+  try {
+    const result = await topUp(ctx.env, input.chain, ctx.household, ctx.ip);
+    return json({ txHash: result.txHash, balanceWei: result.balanceWei.toString() });
+  } catch (failure) {
+    if (failure instanceof RelayDailyLimitError) return error(429, "relay_daily_limit", failure.message);
+    return error(503, "relay_unavailable", "Gas top-up unavailable");
+  }
 };

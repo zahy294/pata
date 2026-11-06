@@ -22,6 +22,8 @@ export interface RouteContext {
   env: Env;
   /** The household address that signed the request (checked by the guard). */
   household: `0x${string}`;
+  /** Cloudflare's trusted client IP, never supplied in the signed JSON body. */
+  ip: string;
   /** Raw body bytes, already read once by the guard to check the signature. */
   body: ArrayBuffer;
   url: URL;

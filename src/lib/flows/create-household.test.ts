@@ -235,6 +235,22 @@ it("rejects a home larger than Arkiv's sealed bytes budget before requesting fun
   expect(io.topup).not.toHaveBeenCalled();
 });
 
+it("accepts an already registered household without a transaction hash and still verifies its resolution", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  io.registerName.mockResolvedValue({ txHash: null });
+  const normalReceipt = io.waitReceipt.getMockImplementation()!;
+  io.waitReceipt.mockImplementation(async (request) => {
+    if (!request.hash) throw new Error("No transaction hash to confirm");
+    return normalReceipt(request);
+  });
+  expect((await createHousehold(keys, input)).name).toBe("sana.pata.eth");
+  expect(io.readContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: "findExactOwner" }));
+  expect(io.getEnsText).toHaveBeenCalledWith(
+    expect.objectContaining({ name: "sana.pata.eth", key: "location" }),
+  );
+  expect(io.waitReceipt.mock.calls.every(([request]) => Boolean(request.hash))).toBe(true);
+});
+
 it("creates a household with progress and seals the complete confirmed home before saving public state", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   const progress: string[] = [];
