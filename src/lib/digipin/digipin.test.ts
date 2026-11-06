@@ -4,6 +4,46 @@ import { decodeDigipin, encodeDigipin, formatDigipin, isValidDigipin, toGridLabe
 import vectors from "./vectors.json";
 
 describe("digipin", () => {
+  it.each([
+    { kind: "null", value: null },
+    { kind: "undefined", value: undefined },
+    { kind: "number", value: 3949 },
+    { kind: "boolean", value: true },
+    { kind: "object", value: {} },
+    { kind: "array", value: ["39J49LL8T4"] },
+    { kind: "boxed string", value: new String("39J49LL8T4") },
+    { kind: "symbol", value: Symbol("DIGIPIN") },
+    { kind: "replace-shaped object", value: { replace: () => "39J49LL8T4" } },
+  ])("returns false for a non-string runtime input: $kind", ({ value }) => {
+    // @ts-expect-error Deliberately exercise JavaScript callers outside the string contract.
+    expect(isValidDigipin(value)).toBe(false);
+  });
+  it.each([
+    { name: "decodeDigipin", run: decodeDigipin },
+    { name: "toGridLabel", run: toGridLabel },
+    { name: "formatDigipin", run: formatDigipin },
+  ])("$name throws its documented error for non-string runtime inputs", ({ run }) => {
+    for (const input of [null, 42, { replace: () => "39J49LL8T4" }]) {
+      // @ts-expect-error Deliberately exercise invalid JavaScript callers without widening the API.
+      expect(() => run(input)).toThrow(/^Invalid DIGIPIN$/);
+    }
+  });
+  it("intentionally normalizes ASCII spaces anywhere, independently of display grouping", () => {
+    const spaced = " 3  9j4 9l l8t 4 ";
+    expect(isValidDigipin(spaced)).toBe(true);
+    expect(decodeDigipin(spaced)).toEqual(decodeDigipin("39J49LL8T4"));
+    expect(toGridLabel(spaced)).toBe("39j49ll8t4");
+    expect(formatDigipin(spaced)).toBe("39J 49LL 8T4");
+  });
+  it.each(["39J\u00a049LL8T4", "39J\u300049LL8T4", "39J49LL8T4-", "39J-49L-L8T4"])(
+    "does not normalize other whitespace or hyphens: %j",
+    (input) => {
+      expect(isValidDigipin(input)).toBe(false);
+      expect(() => decodeDigipin(input)).toThrow("Invalid DIGIPIN");
+      expect(() => toGridLabel(input)).toThrow("Invalid DIGIPIN");
+      expect(() => formatDigipin(input)).toThrow("Invalid DIGIPIN");
+    },
+  );
   it("encodes Dak Bhawan (28.622788, 77.213033) to 39J49LL8T4", () => {
     expect(encodeDigipin({ lat: 28.622788, lon: 77.213033 })).toBe("39J49LL8T4");
   });

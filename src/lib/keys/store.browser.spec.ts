@@ -28,6 +28,41 @@ test("a new device has no root or household state", async ({ page }) => {
   expect(result).toEqual([null, null]);
 });
 
+test("setup checkpoints survive reload, retain sealed bytes and are separated by household address", async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const moduleUrl = "/store.js";
+    const store = await import(moduleUrl);
+    await store.saveSetupCheckpoint("0xAa", {
+      name: "sana.pata.eth",
+      sealedHome: new Uint8Array([1, 2, 3]),
+      registrationHash: "0x99",
+      pending: "register",
+    });
+  });
+  await page.reload();
+  const result = await page.evaluate(async () => {
+    const moduleUrl = "/store.js";
+    const store = await import(moduleUrl);
+    const checkpoint = await store.loadSetupCheckpoint("0xaa");
+    return {
+      ...checkpoint,
+      sealedHome: Array.from(checkpoint.sealedHome),
+      other: await store.loadSetupCheckpoint("0xbb"),
+      state: await store.loadHouseholdState(),
+    };
+  });
+  expect(result).toEqual({
+    name: "sana.pata.eth",
+    sealedHome: [1, 2, 3],
+    registrationHash: "0x99",
+    pending: "register",
+    other: null,
+    state: null,
+  });
+});
+
 test("a device root survives reload and can be replaced", async ({ page }) => {
   await page.evaluate(async () => {
     const moduleUrl = "/store.js";

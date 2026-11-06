@@ -75,9 +75,13 @@ export function decodeDigipin(code: string): DigipinCell {
   };
 }
 
-/** `^[23456789CJKLMPFT]{10}$` after uppercasing and removing spaces. */
+/**
+ * Pata input normalization: ignore ASCII U+0020 spaces anywhere and fold case.
+ * Non-string runtime inputs return false. Hyphens and other whitespace remain invalid.
+ * Canonical storage/interchange still uses ten continuous characters.
+ */
 export function isValidDigipin(code: string): boolean {
-  return /^[23456789CJKLMPFT]{10}$/.test(code.replace(/ /g, "").toUpperCase());
+  return typeof code === "string" && /^[23456789CJKLMPFT]{10}$/.test(code.replace(/ /g, "").toUpperCase());
 }
 
 /** "39J49LL8T4" → "39j49ll8t4" (the grid name label, P1-1). */

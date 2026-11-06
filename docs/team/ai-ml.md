@@ -11,13 +11,17 @@ The privacy rules are yours to defend (AGENTS.md, Invariants):
 
 To run the Worker locally you need `server/.dev.vars` with `ANTHROPIC_API_KEY` and `SARVAM_API_KEY`. Ask the owner for them over a private channel, or use your own free credits. Never paste a key into Codex.
 
-Until the owner's guard (P0-6) lands, every route returns 500, so unit-test your functions directly with Vitest and mocked `fetch`.
+P0-6 guard/spend and P0-5 keys/sealing have landed from main. Address and speech use the owner's `signedPost` helper; speech signatures include the language query. Guard/spend integration is covered with mocked provider HTTP. Use `npm run server:dev` for local server tests; only the owner deploys, following AGENTS.md.
 
 ## Completion checklist
 
 - [x] P0-4: DIGIPIN encode/decode, reusable vectors, 1,000 seeded round-trips and edge tests; `npm run check` passes. Result: `docs/plans/P0-4.md`.
 - [x] P0-7 geometry: shared distance, bearing, offset, segment snapping and pin-spread tests; `npm run check` passes. Result: `docs/plans/P0-7-geo.md`. Map search, AI and speech remain pending.
-- [ ] P0-7 map search: adapters and 26 tests implemented; real Dharavi boundary verified, live Overpass feature check blocked by upstream/network failures. Owner global-coordination integration remains open. Details: `docs/plans/P0-7-osm.md`.
+- [ ] P0-7 map search: adapters implemented; live check **pending owner merge/deployment of the AI branch** (server base is deployed; owner pre-warms Dharavi/BKC). Owner global-coordination integration remains open. Details: `docs/plans/P0-7-osm.md`.
+- [ ] P0-7 address AI (Prompt 4): extraction, ranking, pin placement, routes, signed client and typed setup flow implemented with mocked-fetch coverage. P0-6 guard/spend integration passes with mocked HTTP; live typed Dharavi check remains pending owner merge/deployment or local server testing. Details: `docs/plans/P0-7-ai.md`.
+- [ ] P0-7 speech input (Prompt 5): recording validation, Sarvam adapter, route, signed raw-audio client and Blob setup flow implemented with mocked HTTP. P0-6 guard/spend integration passes with mocked HTTP; live API/phone checks and the two AI/ML hour-0 results remain pending. Details: `docs/plans/P0-7-speech.md` and `server/src/speech/manual-checks.md`.
+
+- [ ] P0-9 directions/audio (Prompt 6): three-language directions, MP3 synthesis, signed routes/client and raw-clip setup flow implemented with mocked-provider and real guard/spend integration coverage. Live voice/duration/phone playback remains pending. `makeDirections` returns `{ directions, clips }`; owner `createHousehold` funds, encrypts and persists clips. Details: `docs/plans/P0-9.md` and `server/src/speech/directions-manual-checks.md`.
 
 ---
 
@@ -86,7 +90,7 @@ Read AGENTS.md, docs/team/ai-ml.md, docs/adr/0007-directions-audio-made-once-at-
 Ticket: P0-9. Write docs/plans/P0-9.md first and commit it.
 1. server/src/ai/directions.ts: one Sonnet call returns { hi, mr, en } directions from the confirmed pin, the landmarks with their relation and the metres computed by code, and the way to the door. Each text short enough for about 20 s of speech (cap the characters; test the cap). Directions describe the last 50 metres in landmarks a courier can see.
 2. server/src/speech/sarvam.ts synthesize: bulbul:v4-flash, mp3, 16 kHz, voices from speech.md; route speech-out returns audio/mpeg.
-3. src/lib/server-client writeDirections and textToSpeech; src/lib/flows/setup-household.ts makeDirections: directions → three clips → blockchain's createVoiceRecord for each (sealed) → { directions, voiceKeys }. If a sealed clip is over the 128 KiB budget, shorten the text and retry once.
+3. src/lib/server-client writeDirections and textToSpeech; src/lib/flows/setup-household.ts makeDirections: directions → three raw Uint8Array clips → { directions, clips }. Updated owner contract: do not write voice records here. createHousehold tops up tGLM, then encrypts and persists clips. clips is partial on synthesis failure. If a clip plus the 29-byte sealing envelope reaches the 128 KiB budget, shorten that language and retry once; return matching text if the retry succeeds.
 4. If Sarvam fails, return the directions anyway with no clip, and the courier view falls back to speechSynthesis (ADR 0007).
 Done when setup produces three playable clips. Commit, push. Post "Unblocks: makeDirections".
 ```

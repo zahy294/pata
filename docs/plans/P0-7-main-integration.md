@@ -1,0 +1,13 @@
+# P0-7: integrate owner server from main
+
+**Goal:** merge `origin/main` into `feat/ai-ml` without rebasing, retain owner implementations and align AI/ML calls with the deployed guard contract.
+
+**Files:** merge conflict in the imports of `src/lib/server-client/index.ts`; owned address/speech wrappers and tests, owned route test contexts and AI/ML plans/manual checklist. Do not edit the owner's signed helper, guard, env, shared types, chain functions, config or deployment scripts.
+
+**Tests first:** existing address/speech client and route seams, now with real guard/spend code and mocked provider HTTP. Prove speech signs pathname **plus query**, is accepted by the real guard, and rejects query tampering; retain raw bytes, schemas, input limits and privacy. Preserve the owner's safe `ServerError` status/code. Add the newly required `ip` only to owned route test fixtures. Owner's helper and chain-client tests remain unchanged.
+
+**Research read:** updated AGENTS.md including Deploys: never, AI/ML/team ownership, shared API, owner's signed helper, guard/spend and test bindings. The old pathname-only speech assumption is superseded by the real guard's pathname-plus-query signature.
+
+**Risks:** no secret-file reads or automatic env edits. Public settings supplied by the user are `NEXT_PUBLIC_SERVER_URL=https://pata-server.pata-ggr.workers.dev` and `NEXT_PUBLIC_PATA_REGISTRY=0x8961FBa6e336FfC00b564d873485Cc342DD00133`. No deployment, Cloudflare mutation, owner scripts, chain transactions or live provider tests. A branch push does not deploy its AI routes; remote testing requires owner merge/deployment, or local `npm run server:dev` on this branch. Live model/phone/CPU and best-effort KV coordination checks remain pending. Include this plan in the requested merge commit because Git does not allow partial commits during a merge.
+
+**Result:** main merged with a single conflict resolved in owned client imports. Owner topup/registration implementations and signed helper/guard/shared types are unchanged. AI wrappers now use signedPost, preserve safe ServerError status/code, and sign the language query. Test contexts include the new ip field; a test-only seal-key fixture uses explicit AES import to avoid merged WebCrypto overload ambiguity. Red/green integration tests verified real guard/spend acceptance and query-tampering rejection with mocked providers. `npm run check` passes: both typechecks, 346 Vitest tests (7 existing TODOs), one Foundry test. `git diff --check` passes. No deployment, secret-file read or live API call. Push outcome is reported separately after the merge commit.

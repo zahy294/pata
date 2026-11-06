@@ -25,6 +25,9 @@ export const RESOLVER_ROLES = {
 
 const R = REGISTRY_ROLES;
 
+/** EACBaseRolesLib.ALL_ROLES, ens-v2.md Values to copy; household's own resolver only. */
+export const RESOLVER_ROOT_ROLES = 0x1111111111111111111111111111111111111111111111111111111111111111n;
+
 /** Roles on a household name in pata.eth's registry: "forever" (ens-v2.md §3). */
 export const HOUSEHOLD_NAME_ROLES =
   R.SET_RESOLVER |
