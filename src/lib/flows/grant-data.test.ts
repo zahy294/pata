@@ -1,6 +1,9 @@
 import { expect, it } from "vitest";
 import { calculateGrantEnd, buildGrantPayload } from "./grant-data";
 import type { HomeRecord, GrantRequest } from "../../../shared/domain";
+import { ARKIV_MAX_BYTES, MAX_VOICE_CLIP_BYTES } from "../../../shared/constants";
+import { deriveHouseholdKeys } from "../keys";
+import { sealJson } from "../seal";
 
 const key = `0x${"12".repeat(32)}` as const;
 const home: HomeRecord = {
@@ -55,4 +58,36 @@ it("builds only the requested language's payload and base64 audio, without voice
 it("handles a large clip without a spread-stack failure and exposes base64's real size", () => {
   const payload = buildGrantPayload(home, request, new Uint8Array(100 * 1024), 1_800_000_050);
   expect(payload.audioMp3Base64).toHaveLength(136_536);
+});
+
+it("builds a text-only payload when setup kept no clip for the language (ADR 0007)", () => {
+  const payload = buildGrantPayload(home, request, null, 1_800_000_050);
+  expect(payload).not.toHaveProperty("audioMp3Base64");
+  expect(payload.directions).toBe("Take the test door");
+});
+
+it("fits the largest allowed clip with 300-character Devanagari directions in one grant batch", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const directions = "द".repeat(300);
+  const longHome = {
+    ...home,
+    writtenAddress: "Room 12, Building 4, ".repeat(25),
+    directions: { hi: directions, mr: directions, en: directions },
+  };
+  const longRequest = { ...request, language: "hi" as const, purpose: "Delivery ".repeat(20) };
+  const payload = buildGrantPayload(
+    longHome,
+    longRequest,
+    new Uint8Array(MAX_VOICE_CLIP_BYTES),
+    1_800_000_050,
+  );
+  const index = {
+    grantLabel: "abcdefgh",
+    requester: longRequest.requester,
+    purpose: longRequest.purpose,
+    grantEnd: 1,
+  };
+  const sealed =
+    (await sealJson(keys.sealKey, payload)).length + (await sealJson(keys.sealKey, index)).length;
+  expect(sealed).toBeLessThanOrEqual(ARKIV_MAX_BYTES);
 });

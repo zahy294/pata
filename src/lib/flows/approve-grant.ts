@@ -39,7 +39,8 @@ export async function approveGrant(
       sessionKey,
     });
     const home = await readHomeRecord(keys, household.homeRecordKey);
-    const voice = await readVoiceRecord(keys, home.voiceKeys[request.language]);
+    const voiceKey = home.voiceKeys[request.language];
+    const voice = voiceKey ? await readVoiceRecord(keys, voiceKey) : null;
     const now = await sepoliaNow();
     let grantEnd = calculateGrantEnd(now, request.durationSeconds);
     const payload = buildGrantPayload(home, request, voice, grantEnd);

@@ -4,7 +4,7 @@ import { createPublicClient as createArkivPublicClient } from "@arkiv-network/sd
 import { deriveHouseholdKeys } from "../keys";
 import { openJson, openBytes, sealJson } from "../seal";
 import { createHousehold, type NewHousehold } from "./setup-household";
-import { ENS } from "../../../shared/constants";
+import { ENS, MAX_VOICE_CLIP_BYTES } from "../../../shared/constants";
 import { verifiableFactoryAbi } from "../ens/abis";
 
 const io = vi.hoisted(() => ({
@@ -329,6 +329,28 @@ it("funds Arkiv before creating all three voice records and puts their keys in t
   });
 });
 
+it("finishes setup when speech failed for one language, keeping its text for speechSynthesis", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const voiceClips = { hi: new Uint8Array([73, 68, 51, 1]), en: new Uint8Array([73, 68, 51, 3]) };
+  const voiceLanguages: string[] = [];
+  io.createEntity.mockImplementation(async (schema, values) => {
+    if (schema.name === "pata.voice.v1") {
+      voiceLanguages.push(values.language ?? "");
+      return { entityKey: `0x${String(voiceLanguages.length).padStart(2, "0").repeat(32)}` };
+    }
+    return { entityKey };
+  });
+  expect((await createHousehold(keys, { ...input, voiceClips })).homeRecordKey).toBe(entityKey);
+  expect(voiceLanguages).toHaveLength(2);
+  const [, values] = io.createEntity.mock.calls.find(([schema]) => schema.name === "pata.home.v1")!;
+  const home = await openJson<{ voiceKeys: object; directions: object }>(
+    keys.sealKey,
+    hexToBytes(values.sealed.value),
+  );
+  expect(Object.keys(home.voiceKeys).sort()).toEqual(["en", "hi"]);
+  expect(home.directions).toEqual(input.directions);
+});
+
 it("checkpoints each language so a failed second clip does not upload the first again", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   const attempts: number[] = [];
@@ -409,7 +431,10 @@ it("migrates an old encrypted journal and pending marker without losing its uplo
 it("rejects oversized voice bytes before top-up and before any upload", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   await expect(
-    createHousehold(keys, { ...input, voiceClips: { ...input.voiceClips, hi: new Uint8Array(128 * 1024) } }),
+    createHousehold(keys, {
+      ...input,
+      voiceClips: { ...input.voiceClips, hi: new Uint8Array(MAX_VOICE_CLIP_BYTES + 1) },
+    }),
   ).rejects.toThrow("oversized voice clip");
   expect(io.topup).not.toHaveBeenCalled();
   expect(io.createEntity).not.toHaveBeenCalled();
