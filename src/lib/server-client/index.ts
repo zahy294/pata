@@ -17,11 +17,18 @@ import type {
 import type { Language } from "../../../shared/domain";
 import type { HouseholdKeys } from "../keys";
 import {
+  ExtractRequest as ExtractRequestSchema,
+  ExtractResponse as ExtractResponseSchema,
+  RankRequest as RankRequestSchema,
+  RankResponse as RankResponseSchema,
   ROUTES,
   RegisterResponse as RegisterSchema,
   TopupResponse as TopupSchema,
 } from "../../../shared/api";
+import { postAddress } from "./address-call";
+import { postRecording } from "./speech-call";
 import { signedPost } from "./signed";
+import { postDirections, postMp3 } from "./directions-call";
 export { ServerError } from "./signed";
 
 export async function topup(keys: HouseholdKeys, req: TopupRequest): Promise<TopupResponse> {
@@ -43,31 +50,22 @@ export async function registerName(keys: HouseholdKeys, req: RegisterRequest): P
 }
 
 export async function extractAddress(keys: HouseholdKeys, req: ExtractRequest): Promise<ExtractResponse> {
-  void keys;
-  void req;
-  throw new Error("extractAddress: not implemented (P0-7)");
+  return postAddress(keys, ROUTES.addressExtract, ExtractRequestSchema.parse(req), ExtractResponseSchema);
 }
 
 export async function rankLandmarks(keys: HouseholdKeys, req: RankRequest): Promise<RankResponse> {
-  void keys;
-  void req;
-  throw new Error("rankLandmarks: not implemented (P0-7)");
+  return postAddress(keys, ROUTES.addressRank, RankRequestSchema.parse(req), RankResponseSchema);
 }
 
 export async function writeDirections(
   keys: HouseholdKeys,
   req: DirectionsRequest,
 ): Promise<DirectionsResponse> {
-  void keys;
-  void req;
-  throw new Error("writeDirections: not implemented (P0-9)");
+  return postDirections(keys, req);
 }
 
 export async function speechToText(keys: HouseholdKeys, audio: Blob, language: Language): Promise<string> {
-  void keys;
-  void audio;
-  void language;
-  throw new Error("speechToText: not implemented (P0-7)");
+  return postRecording(keys, audio, language);
 }
 
 export async function textToSpeech(
@@ -75,8 +73,5 @@ export async function textToSpeech(
   text: string,
   language: Language,
 ): Promise<Uint8Array> {
-  void keys;
-  void text;
-  void language;
-  throw new Error("textToSpeech: not implemented (P0-9)");
+  return postMp3(keys, text, language);
 }

@@ -29,7 +29,8 @@ const elementSchema = z.object({
   geometry: z.array(pointSchema).optional(),
   tags: z.record(z.string(), z.string()).default({}),
 });
-const categories = ["amenity", "shop", "building", "tourism", "leisure", "place_of_worship"];
+// Places of worship use amenity=place_of_worship and are covered by amenity.
+const categories = ["amenity", "shop", "building", "tourism", "leisure"];
 const resultSchema = z.object({
   features: z.array(z.object({ osmId: z.string(), name: z.string(), kind: z.string(), point: pointSchema })),
   streets: z.array(
@@ -57,7 +58,7 @@ export async function featuresInBox(
       const cached = await kv.get(key);
       if (cached !== null) return resultSchema.parse(JSON.parse(cached));
       const [west, south, east, north] = bbox;
-      const query = `[out:json][timeout:25][maxsize:67108864][bbox:${south},${west},${north},${east}];\n(\n${categories.map((key) => `nwr["${key}"]["name"];`).join("\n")}\n);\nout tags center;\nway["highway"];\nout tags geom;`;
+      const query = `[out:json][timeout:60][maxsize:67108864][bbox:${south},${west},${north},${east}];\n(\n${categories.map((key) => `nwr["${key}"]["name"];`).join("\n")}\n);\nout tags center;\nway["highway"~"^(residential|service|living_street|unclassified|tertiary|secondary|primary|pedestrian|footway|path)$"];\nout tags geom;`;
       let response: Response | undefined;
       for (const url of [endpoint, fallback]) {
         await paceGeo(kv, "overpass");
@@ -65,7 +66,7 @@ export async function featuresInBox(
           method: "POST",
           headers: { "User-Agent": GEO_USER_AGENT, "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({ data: query }).toString(),
-          signal: AbortSignal.timeout(35_000),
+          signal: AbortSignal.timeout(90_000),
         });
         if (![429, 504, 406].includes(response.status)) break;
         await backoffGeo(kv, "overpass", response.headers.get("Retry-After"));
@@ -114,7 +115,8 @@ export async function featuresInBox(
       await kv.put(key, JSON.stringify(result), { expirationTtl: GEO_CACHE_SECONDS });
       return result;
     } catch {
-      throw new Error("Map search unavailable");
+      // Preserve hand-dropped-pin fallback; never cache a failed/partial map reply.
+      return { features: [], streets: [] };
     }
   });
 }

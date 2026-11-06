@@ -1,0 +1,193 @@
+{
+  "generator": "ffmpeg version n9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+  "cases": [
+    {
+      "file": "webm-2.webm",
+      "sourceSeconds": 2,
+      "packetEndSeconds": 2.001,
+      "sha256": "e7315a282126810fb90d39a1486e2b3ceeea37196e1fd13e9d01f28d1db6ca51",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "2",
+        "-c:a",
+        "libopus",
+        "src/lib/server-client/fixtures/webm-2.webm"
+      ]
+    },
+    {
+      "file": "live-webm-2.webm",
+      "sourceSeconds": 2,
+      "packetEndSeconds": 2.001,
+      "sha256": "1393523530fc13c251c1eec5d619c98814ad574363078e88a0675fac4d1326e8",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "2",
+        "-c:a",
+        "libopus",
+        "-live",
+        "1",
+        "src/lib/server-client/fixtures/live-webm-2.webm"
+      ]
+    },
+    {
+      "file": "mp4-2.mp4",
+      "sourceSeconds": 2,
+      "packetEndSeconds": 2.0,
+      "sha256": "7f833b4b8e85f139dfde137242635fadad0dd89538ec11f2dfc83e124a0e3bf0",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "2",
+        "-c:a",
+        "aac",
+        "src/lib/server-client/fixtures/mp4-2.mp4"
+      ]
+    },
+    {
+      "file": "fragmented-mp4-2.mp4",
+      "sourceSeconds": 2,
+      "packetEndSeconds": 2.021333,
+      "sha256": "fb443e414c5d1b365b089f6c248c00a06d92f7f7ed757e0b6c211a6d2ffd7998",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "2",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "frag_keyframe+empty_moov+default_base_moof",
+        "-frag_duration",
+        "1000000",
+        "src/lib/server-client/fixtures/fragmented-mp4-2.mp4"
+      ]
+    },
+    {
+      "file": "webm-31.webm",
+      "sourceSeconds": 31,
+      "packetEndSeconds": 31.001,
+      "sha256": "f6b0b624d05b84c4f13ea468e9c75a49371f6f15b22489fd978f28b86739ef99",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "31",
+        "-c:a",
+        "libopus",
+        "src/lib/server-client/fixtures/webm-31.webm"
+      ]
+    },
+    {
+      "file": "live-webm-31.webm",
+      "sourceSeconds": 31,
+      "packetEndSeconds": 31.001,
+      "sha256": "a27f14d133aee9835be6f09df92871f3c6d146b7ca75057bfbc6adfe7df3e45b",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "31",
+        "-c:a",
+        "libopus",
+        "-live",
+        "1",
+        "src/lib/server-client/fixtures/live-webm-31.webm"
+      ]
+    },
+    {
+      "file": "mp4-31.mp4",
+      "sourceSeconds": 31,
+      "packetEndSeconds": 31.0,
+      "sha256": "6a67458b4763fa8978ef4bf650311841041616a976e580206fd93c3ff0019eba",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "31",
+        "-c:a",
+        "aac",
+        "src/lib/server-client/fixtures/mp4-31.mp4"
+      ]
+    },
+    {
+      "file": "fragmented-mp4-31.mp4",
+      "sourceSeconds": 31,
+      "packetEndSeconds": 31.021334,
+      "sha256": "d7a05b384021ff63cd905006283e3647f75e21226c950ae0b6d8e78d36a9ef1d",
+      "command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=mono",
+        "-t",
+        "31",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "frag_keyframe+empty_moov+default_base_moof",
+        "-frag_duration",
+        "1000000",
+        "src/lib/server-client/fixtures/fragmented-mp4-31.mp4"
+      ]
+    }
+  ]
+}

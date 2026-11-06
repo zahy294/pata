@@ -15,11 +15,21 @@ import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
 import type { HouseholdState, SetupCheckpoint } from "../keys/store";
 import { LANGUAGES } from "../../../shared/domain";
+import { distanceMetres } from "../../../shared/geo";
 import { toHex } from "viem";
 import { deriveHouseholdKeys, newRandomRoot } from "../keys";
 import { loadDeviceRoot, saveDeviceRoot } from "../keys/store";
 import { withDeviceLock } from "../keys/device-lock";
-import { topup, registerName } from "../server-client";
+import {
+  topup,
+  registerName,
+  extractAddress,
+  rankLandmarks,
+  speechToText,
+  writeDirections,
+  textToSpeech,
+} from "../server-client";
+import { shortenDirections } from "../server-client/directions-text";
 import { deployHouseholdContracts } from "../ens/household";
 import { dnsEncode, isValidHouseholdLabel } from "../ens/names";
 import { universalHelperAbi } from "../ens/abis";
@@ -49,10 +59,9 @@ export async function describeTheWay(
   input: Blob | string,
   language: Language,
 ): Promise<{ wayToTheDoor: string; locality: Locality | null; landmarkPhrases: string[] }> {
-  void keys;
-  void input;
-  void language;
-  throw new Error("describeTheWay: not implemented (P0-7)");
+  const wayToTheDoor = typeof input === "string" ? input : await speechToText(keys, input, language);
+  const parts = await extractAddress(keys, { wayToTheDoor, language });
+  return { wayToTheDoor, ...parts };
 }
 
 /** Step 3–4: candidate pins from the server. Empty candidates → hand-dropped pin. */
@@ -62,25 +71,45 @@ export async function findCandidatePins(
   locality: Locality,
   landmarkPhrases: string[],
 ): Promise<RankResponse> {
-  void keys;
-  void wayToTheDoor;
-  void locality;
-  void landmarkPhrases;
-  throw new Error("findCandidatePins: not implemented (P0-7)");
+  return rankLandmarks(keys, { wayToTheDoor, locality, landmarkPhrases });
 }
 
-/** Step 5: directions in hi/mr/en from the confirmed pin, then one clip each, sealed to Arkiv. */
+/** Step 5: raw clips for createHousehold to encrypt/persist after funding; no Arkiv writes here. */
 export async function makeDirections(
   keys: HouseholdKeys,
   wayToTheDoor: string,
   confirmedPin: LatLon,
   landmarks: { feature: OsmFeature; relation: Relation }[],
-): Promise<{ directions: DirectionsText; voiceKeys: Record<Language, `0x${string}`> }> {
-  void keys;
-  void wayToTheDoor;
-  void confirmedPin;
-  void landmarks;
-  throw new Error("makeDirections: not implemented (P0-9)");
+): Promise<{ directions: DirectionsText; clips: Partial<Record<Language, Uint8Array>> }> {
+  const { directions } = await writeDirections(keys, {
+    wayToTheDoor,
+    pin: confirmedPin,
+    landmarks: landmarks.map(({ feature, relation }) => ({
+      feature,
+      relation,
+      metres: distanceMetres(confirmedPin, feature.point),
+    })),
+  });
+  const clips: Partial<Record<Language, Uint8Array>> = {};
+  for (const language of LANGUAGES) {
+    try {
+      let text = directions[language];
+      let clip = await textToSpeech(keys, text, language);
+      // sealBytes v1: one version byte, 12-byte IV and 16-byte AES-GCM tag.
+      // createHousehold owns encryption and persistence after funding.
+      if (clip.byteLength + 29 >= ARKIV_MAX_BYTES) {
+        text = shortenDirections(text, Math.max(1, Math.floor(Array.from(text).length / 2)));
+        clip = await textToSpeech(keys, text, language);
+      }
+      if (clip.byteLength + 29 < ARKIV_MAX_BYTES) {
+        directions[language] = text;
+        clips[language] = clip;
+      }
+    } catch {
+      // ADR 0007: retain directions for browser speech fallback.
+    }
+  }
+  return { directions, clips };
 }
 
 export interface NewHousehold {
