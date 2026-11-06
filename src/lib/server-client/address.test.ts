@@ -122,3 +122,35 @@ it("validates input before signing or sending it", async () => {
   ).rejects.toThrow();
   expect(network).not.toHaveBeenCalled();
 });
+
+it("retries a model-unavailable 502 with a fresh request, but never the spend cap", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
+  const unavailable = () =>
+    Response.json({ code: "address_unavailable", error: "Address extraction unavailable" }, { status: 502 });
+  const network = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(unavailable())
+    .mockResolvedValueOnce(unavailable())
+    .mockImplementation(async () => Response.json(parts));
+  vi.stubGlobal("fetch", network);
+  const keys = await testHouseholdKeys();
+  await expect(extractAddress(keys, { wayToTheDoor: "near Temple", language: "en" })).resolves.toEqual(parts);
+  expect(network).toHaveBeenCalledTimes(3);
+
+  network.mockReset();
+  network.mockImplementation(async () => unavailable());
+  await expect(extractAddress(keys, { wayToTheDoor: "near Temple", language: "en" })).rejects.toMatchObject({
+    status: 502,
+    code: "address_unavailable",
+  });
+  expect(network).toHaveBeenCalledTimes(3);
+
+  network.mockReset();
+  network.mockResolvedValue(
+    Response.json({ code: "spend_limit", error: "Daily spend limit reached" }, { status: 429 }),
+  );
+  await expect(extractAddress(keys, { wayToTheDoor: "near Temple", language: "en" })).rejects.toMatchObject({
+    status: 429,
+  });
+  expect(network).toHaveBeenCalledTimes(1);
+});
