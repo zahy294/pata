@@ -2,10 +2,11 @@
 // Set up a household (P0-7, P0-8, P0-9). Owner: frontend; logic in src/lib/flows/setup-household.ts.
 // Steps:
 // 1. Sign in (device root / passkey) → flows.signIn().
-// 2. "How do people find your door?": Recorder OR textarea; language picker (hi/mr/en);
-//    separate input "Room or flat number" ("Stays on this phone"). → flows.describeTheWay(...).
-//    If locality is null, ask for the area and PIN code.
-// 3. → flows.findCandidatePins(...). PinPicker shows up to 3 candidates on MapView (or manual drop).
+// 2. "Where is your home?": optional "Use my current location" (flows.locateHome), typed area, PIN code,
+//    nearby landmark and how to find the door (flows.describeTypedAddress, no model call), and a separate
+//    "Room or flat number" ("Stays on this phone"). No voice recorder (ADR 0010).
+// 3. With a location fix, PinPicker starts a hand-dropped pin there and there's no landmark search.
+//    Otherwise → flows.findCandidatePins(...): up to 3 candidates on MapView (or manual drop).
 // 4. Confirm → show the DIGIPIN with formatDigipin.
 // 5. → flows.makeDirections(...): show the three directions texts with play buttons (AudioPlayer reads
 //    the text with the phone's speechSynthesis; setup makes no clips, ADR 0010).
@@ -15,7 +16,6 @@
 //    Then go to /.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Recorder from "../../components/Recorder";
 import PinPicker from "../../components/PinPicker";
 import AudioPlayer from "../../components/AudioPlayer";
 import { encodeDigipin, formatDigipin } from "../../lib/digipin";
@@ -43,7 +43,7 @@ const LANGUAGE_LABELS: { code: Language; label: string; sub: string }[] = [
 ];
 
 const QUICK_CHIPS = [
-  "Opposite Hanuman Mandir",
+  "Second lane on the left",
   "Blue iron gate",
   "Past the chai stall",
   "2nd floor staircase",
@@ -58,20 +58,17 @@ export default function SetupPage() {
   const [signInLoading, setSignInLoading] = useState(true);
   const [signInError, setSignInError] = useState<string | null>(null);
 
-  // Step 2: Describe the way
-  const [language, setLanguage] = useState<Language>("en");
+  // Step 2: Typed address fields and an optional phone location (ADR 0010)
+  const [localityName, setLocalityName] = useState("");
+  const [pinCode, setPinCode] = useState("");
+  const [landmark, setLandmark] = useState("");
   const [typedWay, setTypedWay] = useState("");
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [roomNumber, setRoomNumber] = useState("");
-  const [describeLoading, setDescribeLoading] = useState(false);
+  const [homeFix, setHomeFix] = useState<flows.HomeFix | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
   const [describeError, setDescribeError] = useState<string | null>(null);
-
-  // Step 2b: Missing locality prompt (when describeTheWay returns locality: null)
   const [wayToTheDoor, setWayToTheDoor] = useState("");
-  const [landmarkPhrases, setLandmarkPhrases] = useState<string[]>([]);
-  const [needsLocalityPrompt, setNeedsLocalityPrompt] = useState(false);
-  const [manualArea, setManualArea] = useState("");
-  const [manualPinCode, setManualPinCode] = useState("");
   const [locality, setLocality] = useState<Locality | null>(null);
 
   // Step 3: Candidate pins
@@ -150,11 +147,8 @@ export default function SetupPage() {
     } catch (failure) {
       if (flows.isLocalityNotFound(failure)) {
         // Neither "area, PIN" nor the PIN alone is on the map: let the household correct them.
-        setManualArea(loc.name);
-        setManualPinCode(loc.pinCode);
-        setNeedsLocalityPrompt(true);
         setPinsError(
-          `We couldn't find "${loc.name}, ${loc.pinCode}" on the map. Check the area name and 6-digit PIN code below.`,
+          `We couldn't find "${loc.name}, ${loc.pinCode}" on the map. Check the area and PIN code above, or use your location.`,
         );
       } else {
         setPinsError(
@@ -166,60 +160,51 @@ export default function SetupPage() {
     }
   };
 
-  // Step 2 handler: describeTheWay
-  const handleDescribeSubmit = async () => {
-    if (!keys) return;
-    const blobOrText: Blob | string = recordedBlob ?? typedWay.trim();
-    if (!blobOrText || (typeof blobOrText === "string" && !blobOrText)) {
-      setDescribeError(
-        "Please record a short voice note or type how people find your door.",
-      );
-      return;
-    }
-
-    setDescribeLoading(true);
-    setDescribeError(null);
+  // Step 2 (optional): start the pin at the phone's position
+  const handleLocate = async () => {
+    setLocating(true);
+    setLocateError(null);
     try {
-      const result = await flows.describeTheWay(keys, blobOrText, language);
-      setWayToTheDoor(result.wayToTheDoor);
-      setLandmarkPhrases(result.landmarkPhrases);
-
-      if (!result.locality) {
-        setNeedsLocalityPrompt(true);
-        return;
-      }
-
-      setLocality(result.locality);
-      setNeedsLocalityPrompt(false);
-      await runFindCandidatePins(
-        keys,
-        result.wayToTheDoor,
-        result.locality,
-        result.landmarkPhrases,
-      );
+      setHomeFix(await flows.locateHome());
     } catch (failure) {
-      setDescribeError(flows.describeTheWayError(failure));
+      setHomeFix(null);
+      setLocateError(flows.locateHomeError(failure));
     } finally {
-      setDescribeLoading(false);
+      setLocating(false);
     }
   };
 
-  // Step 2b handler: when locality was null and user enters area + PIN code
-  const handleManualLocalitySubmit = async () => {
+  // Step 2 handler: typed fields → a pin at the phone's fix, or the landmark search
+  const handleDescribeSubmit = async () => {
     if (!keys) return;
-    const trimmedArea = manualArea.trim();
-    const trimmedPin = manualPinCode.trim();
-    if (!trimmedArea || !/^\d{6}$/.test(trimmedPin)) {
-      setDescribeError(
-        "Please enter your neighbourhood name and a 6-digit PIN code.",
-      );
+    const typed = flows.describeTypedAddress({
+      localityName,
+      pinCode,
+      landmark,
+      doorNotes: typedWay,
+    });
+    if (!typed.ok) {
+      setDescribeError(typed.problem);
       return;
     }
-    const loc: Locality = { name: trimmedArea, pinCode: trimmedPin };
-    setLocality(loc);
-    setNeedsLocalityPrompt(false);
     setDescribeError(null);
-    await runFindCandidatePins(keys, wayToTheDoor, loc, landmarkPhrases);
+    setPinsError(null);
+    setWayToTheDoor(typed.wayToTheDoor);
+    setLocality(typed.locality);
+    if (homeFix) {
+      // No landmark search with a fix, so the position never reaches map search.
+      const { lat, lon } = homeFix.pin;
+      setCandidates([]);
+      setBbox([lon, lat, lon, lat]);
+      setScreen("pin");
+      return;
+    }
+    await runFindCandidatePins(
+      keys,
+      typed.wayToTheDoor,
+      typed.locality,
+      typed.landmarkPhrases,
+    );
   };
 
   // Step 5 helper: makeDirections
@@ -398,70 +383,132 @@ export default function SetupPage() {
         </section>
       )}
 
-      {/* STEP 2: HOW DO PEOPLE FIND YOUR DOOR? */}
+      {/* STEP 2: WHERE IS YOUR HOME? (typed fields + optional phone location, ADR 0010) */}
       {screen === "describe" && (
         <div className="flex flex-col gap-4">
-          {/* Header & Language Picker */}
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
-                Step 1 of 4 • Arrival Guidance
-              </span>
-
-              <div
-                className="inline-flex rounded-full border border-[#E6DAC6] bg-[#FFFDF9] p-0.5"
-                role="group"
-                aria-label="Language picker"
-              >
-                {LANGUAGE_LABELS.map((lang) => {
-                  const active = language === lang.code;
-                  return (
-                    <button
-                      key={lang.code}
-                      type="button"
-                      onClick={() => setLanguage(lang.code)}
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-                        active
-                          ? "bg-[#046A38] text-[#FFFDF9]"
-                          : "text-[#6E655A] hover:text-[#1F1C18]"
-                      }`}
-                    >
-                      {lang.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
+            <span className="inline-flex items-center self-start rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
+              Step 1 of 4 • Your Address
+            </span>
             <h1 className="font-serif text-2xl font-bold tracking-tight text-[#1F1C18]">
-              How do people find your door?
+              Where is your home?
             </h1>
             <p className="text-sm text-[#6E655A]">
-              Add recognizable landmarks and physical cues for swift delivery.
+              Use your location, or type a nearby landmark. Only your area and
+              PIN code are public.
             </p>
           </div>
 
-          {/* Ground Route Notes Card (Textarea) */}
+          {/* Phone location: the pin starts here */}
           <section className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <label
-                htmlFor="way-textarea"
-                className="text-sm font-bold text-[#1F1C18]"
-              >
-                Ground Route Notes
-              </label>
-              <span className="rounded-md bg-[#F2ECE1] px-2 py-0.5 text-[11px] font-medium text-[#6E655A]">
-                Spoken or typed
-              </span>
+            <button
+              type="button"
+              disabled={locating}
+              onClick={() => void handleLocate()}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#046A38] bg-[#E3F2E8] px-4 py-3 text-sm font-semibold text-[#046A38] transition hover:bg-[#D2EBD9] disabled:opacity-50"
+            >
+              {locating ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+                  <span>Finding your location…</span>
+                </>
+              ) : (
+                <>
+                  <span aria-hidden="true">📍</span>
+                  <span>
+                    {homeFix
+                      ? "Location found · Try again"
+                      : "Use my current location"}
+                  </span>
+                </>
+              )}
+            </button>
+            <p className="mt-2 text-[11px] leading-relaxed text-[#6E655A]">
+              {homeFix
+                ? `Within about ${Math.round(homeFix.accuracyMetres)} m. You'll move the pin onto your door next.`
+                : "Best when you're at home. Your location never goes to map search; you'll move the pin onto your door next."}
+            </p>
+            {locateError && (
+              <p className="mt-2 text-xs font-medium text-[#8A2522]">
+                {locateError}
+              </p>
+            )}
+          </section>
+
+          {/* Typed address fields */}
+          <section className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4 shadow-sm">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <label
+                  htmlFor="area-input"
+                  className="block text-xs font-semibold text-[#4A433B]"
+                >
+                  Area / Locality
+                </label>
+                <input
+                  id="area-input"
+                  type="text"
+                  maxLength={80}
+                  value={localityName}
+                  onChange={(e) => setLocalityName(e.target.value)}
+                  placeholder="e.g., Dharavi"
+                  className="mt-1 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-3 py-2 text-sm text-[#1F1C18] placeholder-[#8C8275] focus:border-[#046A38] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="pincode-input"
+                  className="block text-xs font-semibold text-[#4A433B]"
+                >
+                  PIN code
+                </label>
+                <input
+                  id="pincode-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  value={pinCode}
+                  onChange={(e) =>
+                    // Digits only, so a pasted "400 017" fits; a maxLength would cut it before the space goes.
+                    setPinCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder="e.g., 400017"
+                  className="mt-1 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-3 py-2 font-mono text-sm text-[#1F1C18] placeholder-[#8C8275] focus:border-[#046A38] focus:outline-none"
+                />
+              </div>
             </div>
 
+            <label
+              htmlFor="landmark-input"
+              className="mt-3 block text-xs font-semibold text-[#4A433B]"
+            >
+              Nearby landmark{" "}
+              <span className="font-normal text-[#8C8275]">(optional)</span>
+            </label>
+            <input
+              id="landmark-input"
+              type="text"
+              maxLength={80}
+              value={landmark}
+              onChange={(e) => setLandmark(e.target.value)}
+              placeholder="e.g., Hanuman Mandir"
+              className="mt-1 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-3 py-2 text-sm text-[#1F1C18] placeholder-[#8C8275] focus:border-[#046A38] focus:outline-none"
+            />
+
+            <label
+              htmlFor="way-textarea"
+              className="mt-3 block text-xs font-semibold text-[#4A433B]"
+            >
+              How to find your door
+            </label>
             <textarea
               id="way-textarea"
               rows={3}
+              maxLength={1000}
               value={typedWay}
               onChange={(e) => setTypedWay(e.target.value)}
-              placeholder="e.g., Opposite Hanuman Mandir, Kumbharwada Lane 4, blue gate, Dharavi 400017"
-              className="mt-2.5 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3 text-sm text-[#1F1C18] placeholder-[#8C8275] focus:border-[#046A38] focus:outline-none"
+              placeholder="e.g., Blue iron gate, second lane on the left, past the chai stall"
+              className="mt-1 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3 text-sm text-[#1F1C18] placeholder-[#8C8275] focus:border-[#046A38] focus:outline-none"
             />
 
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -484,14 +531,6 @@ export default function SetupPage() {
               ))}
             </div>
           </section>
-
-          {/* Spoken Directions (Recorder) */}
-          <Recorder
-            onRecorded={(blob) => {
-              setRecordedBlob(blob);
-              setDescribeError(null);
-            }}
-          />
 
           {/* Separate Room or Flat Number Card — Deep Emerald Privacy Vault */}
           <section className="rounded-2xl bg-[#046A38] p-4 text-[#FFFDF9] shadow-sm">
@@ -529,106 +568,43 @@ export default function SetupPage() {
             </div>
           </section>
 
-          {/* Fallback prompt when locality is null */}
-          {needsLocalityPrompt && (
-            <section className="rounded-2xl border-2 border-[#B8862D] bg-[#FFFDF9] p-4 shadow-sm">
-              <h3 className="text-sm font-bold text-[#1F1C18]">
-                Add your area and PIN code
-              </h3>
-              <p className="mt-1 text-xs text-[#6E655A]">
-                We could not spot your neighbourhood or 6-digit PIN code in the
-                description. Please confirm them below:
-              </p>
-              <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="manual-area"
-                    className="block text-xs font-semibold text-[#4A433B]"
-                  >
-                    Area / Locality
-                  </label>
-                  <input
-                    id="manual-area"
-                    type="text"
-                    value={manualArea}
-                    onChange={(e) => setManualArea(e.target.value)}
-                    placeholder="e.g., Dharavi"
-                    className="mt-1 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-3 py-2 text-sm text-[#1F1C18]"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="manual-pincode"
-                    className="block text-xs font-semibold text-[#4A433B]"
-                  >
-                    6-digit PIN Code
-                  </label>
-                  <input
-                    id="manual-pincode"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={manualPinCode}
-                    onChange={(e) => setManualPinCode(e.target.value)}
-                    placeholder="e.g., 400017"
-                    className="mt-1 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-3 py-2 font-mono text-sm text-[#1F1C18]"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={pinsLoading}
-                onClick={() => void handleManualLocalitySubmit()}
-                className="mt-3 w-full rounded-xl bg-[#B8862D] px-4 py-2.5 text-xs font-semibold text-[#FFFDF9] transition hover:bg-[#9E7122] disabled:opacity-50"
-              >
-                {pinsLoading
-                  ? "Searching neighbourhood…"
-                  : "Continue with Area & PIN →"}
-              </button>
-            </section>
-          )}
-
           {/* Error Banner + Retry */}
           {(describeError || pinsError) && (
             <div className="flex flex-col gap-2.5 rounded-xl border border-[#D9534F]/30 bg-[#FDF3F2] p-3.5">
               <p className="text-xs font-medium text-[#8A2522]">
                 {describeError ?? pinsError}
               </p>
-              <button
-                type="button"
-                onClick={() =>
-                  needsLocalityPrompt
-                    ? void handleManualLocalitySubmit()
-                    : void handleDescribeSubmit()
-                }
-                className="self-start rounded-lg bg-[#046A38] px-3 py-1.5 text-xs font-semibold text-[#FFFDF9]"
-              >
-                Retry
-              </button>
+              {!describeError && (
+                <button
+                  type="button"
+                  onClick={() => void handleDescribeSubmit()}
+                  className="self-start rounded-lg bg-[#046A38] px-3 py-1.5 text-xs font-semibold text-[#FFFDF9]"
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
 
           {/* Primary CTA */}
-          {!needsLocalityPrompt && (
-            <button
-              type="button"
-              disabled={describeLoading || pinsLoading}
-              onClick={() => void handleDescribeSubmit()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#046A38] px-4 py-3.5 text-sm font-semibold text-[#FFFDF9] shadow-sm transition hover:bg-[#03562D] disabled:opacity-50"
-            >
-              {describeLoading || pinsLoading ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
-                  <span>Finding nearby landmarks…</span>
-                </>
-              ) : (
-                <>
-                  <span>Find My Door</span>
-                  <span aria-hidden="true">→</span>
-                </>
-              )}
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={pinsLoading || locating}
+            onClick={() => void handleDescribeSubmit()}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#046A38] px-4 py-3.5 text-sm font-semibold text-[#FFFDF9] shadow-sm transition hover:bg-[#03562D] disabled:opacity-50"
+          >
+            {pinsLoading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                <span>Finding nearby landmarks…</span>
+              </>
+            ) : (
+              <>
+                <span>Find My Door</span>
+                <span aria-hidden="true">→</span>
+              </>
+            )}
+          </button>
         </div>
       )}
 
@@ -660,6 +636,7 @@ export default function SetupPage() {
             candidates={candidates}
             bbox={bbox}
             onConfirm={handlePinConfirmed}
+            fromLocation={candidates.length === 0 && homeFix !== null}
           />
 
           <button
@@ -667,7 +644,7 @@ export default function SetupPage() {
             onClick={() => setScreen("describe")}
             className="self-center text-xs font-medium text-[#6E655A] underline hover:text-[#1F1C18]"
           >
-            ← Edit door description
+            ← Edit address
           </button>
         </div>
       )}

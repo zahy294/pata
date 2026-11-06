@@ -12,6 +12,8 @@ export interface PinPickerProps {
   candidates: CandidatePin[];
   bbox: [number, number, number, number];
   onConfirm: (pin: LatLon, chosen: CandidatePin | null) => void;
+  /** The hand-dropped pin starts at the phone's location fix (no landmark search ran). */
+  fromLocation?: boolean;
 }
 
 const RELATION_LABEL: Record<CandidatePin["relation"], string> = {
@@ -46,6 +48,7 @@ export default function PinPicker({
   candidates,
   bbox,
   onConfirm,
+  fromLocation = false,
 }: PinPickerProps) {
   const visibleCandidates = useMemo(
     () => candidates.slice(0, 3),
@@ -215,11 +218,12 @@ export default function PinPicker({
       ) : (
         <div className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4">
           <p className="text-sm font-semibold text-[#1F1C18]">
-            Drop a pin on your door
+            {fromLocation ? "Move the pin onto your door" : "Drop a pin on your door"}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-[#6E655A]">
-            We could not match a nearby landmark automatically. Zoom in on the
-            map above and tap your exact entrance, or drag the pin there.
+            {fromLocation
+              ? "The pin starts where your phone is. Zoom in and tap your exact entrance, or drag the pin there."
+              : "We could not match a nearby landmark automatically. Zoom in on the map above and tap your exact entrance, or drag the pin there."}
           </p>
         </div>
       )}

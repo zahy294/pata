@@ -21,11 +21,11 @@ The public part of an address: the neighbourhood and PIN code, such as "Dharavi,
 _Avoid_: area, region, PIN (alone)
 
 **Way to the door**:
-The household's spoken description of how to reach the home, in landmarks. It's the only part of the address the model hears.
+The household's description of how to reach the home, in landmarks, typed at setup ([ADR 0011](docs/adr/0011-setup-takes-a-typed-address-and-the-phone-location.md)). It's the only part of the address the model sees.
 _Avoid_: address text, description, prompt
 
 **Directions**:
-Step-by-step guidance to the door, written from the confirmed pin in the requester's language, as text and audio.
+Step-by-step guidance to the door, written from the confirmed pin in the requester's language, as text the phone reads aloud ([ADR 0010](docs/adr/0010-setup-makes-no-voice-clips.md)).
 _Avoid_: instructions, route
 
 **Pin**:

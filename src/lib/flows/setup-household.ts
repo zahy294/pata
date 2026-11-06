@@ -37,7 +37,7 @@ import { universalHelperAbi } from "../ens/abis";
 import { sepoliaPublicClient, arkivPublicClient } from "../rpc";
 import { createHomeRecord, createVoiceRecord } from "../arkiv";
 import { canonicalJson } from "../arkiv/reuse";
-import { encodeDigipin } from "../digipin";
+import { encodeDigipin, DIGIPIN_BOUNDS } from "../digipin";
 import { saveHouseholdState, loadSetupCheckpoint, saveSetupCheckpoint } from "../keys/store";
 import { sealJson, openJson } from "../seal";
 import {
@@ -114,6 +114,97 @@ export async function describeTheWay(
   const wayToTheDoor = typeof input === "string" ? input : await speechToText(keys, input, language);
   const parts = await extractAddress(keys, { wayToTheDoor, language });
   return { wayToTheDoor, ...parts };
+}
+
+/** The setup screen's typed address fields, which replace the recorded way to the door (ADR 0010). */
+export interface TypedAddress {
+  /** With pinCode, the public locality. */
+  localityName: string;
+  pinCode: string;
+  /** Optional; the only field that reaches map search, beside the locality. */
+  landmark: string;
+  /** Gate, lane, stairs: how to find the door once near it. */
+  doorNotes: string;
+}
+
+export type TypedAddressResult =
+  | { ok: true; wayToTheDoor: string; locality: Locality; landmarkPhrases: string[] }
+  | { ok: false; problem: string };
+
+/** Step 2: typed fields → the way to the door, locality and landmark phrases, with no model call. */
+export function describeTypedAddress(fields: TypedAddress): TypedAddressResult {
+  const localityName = fields.localityName.trim().replace(/\s+/g, " ");
+  const pinCode = fields.pinCode.replace(/\s+/g, "");
+  const landmark = fields.landmark.trim().replace(/\s+/g, " ");
+  const doorNotes = fields.doorNotes.trim().replace(/[\s,.;]+$/, "");
+  if (!localityName || localityName.length > 80)
+    return { ok: false, problem: "Enter your area or neighbourhood (up to 80 letters)." };
+  if (!/^\d{6}$/.test(pinCode)) return { ok: false, problem: "Enter your 6-digit PIN code." };
+  if (landmark.length > 80)
+    return { ok: false, problem: "Keep the landmark to one short name (up to 80 letters)." };
+  if (!doorNotes) return { ok: false, problem: "Say how to find your door: the gate, the lane, the floor." };
+  if (doorNotes.length > 1000)
+    return { ok: false, problem: "Shorten how to find your door (up to 1000 letters)." };
+  return {
+    ok: true,
+    wayToTheDoor: [doorNotes, landmark && `near ${landmark}`, `${localityName} ${pinCode}`]
+      .filter(Boolean)
+      .join(", "),
+    locality: { name: localityName, pinCode },
+    landmarkPhrases: landmark ? [landmark] : [],
+  };
+}
+
+export interface HomeFix {
+  pin: LatLon;
+  accuracyMetres: number;
+}
+
+export class LocateError extends Error {
+  constructor(readonly reason: "unsupported" | "denied" | "unavailable" | "timeout" | "outside") {
+    super(`Location ${reason}`);
+  }
+}
+
+/**
+ * Step 2, optional: the phone's position as the starting pin, which the household then adjusts.
+ * With a fix, setup skips the landmark search, so the position never reaches map search.
+ */
+export async function locateHome(
+  geolocation: Geolocation | undefined = typeof navigator === "undefined" ? undefined : navigator.geolocation,
+): Promise<HomeFix> {
+  if (!geolocation) throw new LocateError("unsupported");
+  const position = await new Promise<GeolocationPosition>((resolve, reject) =>
+    geolocation.getCurrentPosition(
+      resolve,
+      (failure) =>
+        reject(
+          new LocateError(failure.code === 1 ? "denied" : failure.code === 3 ? "timeout" : "unavailable"),
+        ),
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
+    ),
+  );
+  const pin = { lat: position.coords.latitude, lon: position.coords.longitude };
+  const { minLat, maxLat, minLon, maxLon } = DIGIPIN_BOUNDS;
+  if (!(pin.lat >= minLat && pin.lat <= maxLat && pin.lon >= minLon && pin.lon <= maxLon))
+    throw new LocateError("outside");
+  return { pin, accuracyMetres: position.coords.accuracy };
+}
+
+/** A plain sentence for a failed locateHome; the typed landmark is always the way forward. */
+export function locateHomeError(failure: unknown): string {
+  switch (failure instanceof LocateError ? failure.reason : "unavailable") {
+    case "unsupported":
+      return "This browser can't share your location. Type a nearby landmark instead.";
+    case "denied":
+      return "Location is blocked for this site. Allow it (tap the icon left of the address bar → Permissions → Location), or type a nearby landmark instead.";
+    case "timeout":
+      return "Your phone took too long to find you. Step near a window and try again, or type a nearby landmark.";
+    case "outside":
+      return "Your location is outside India's DIGIPIN grid. Type a nearby landmark instead.";
+    default:
+      return "Your phone couldn't find its location. Turn on location and try again, or type a nearby landmark.";
+  }
 }
 
 /** Step 3–4: candidate pins from the server. Empty candidates → hand-dropped pin. */
