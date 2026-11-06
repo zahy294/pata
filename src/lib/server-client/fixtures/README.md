@@ -25,3 +25,15 @@ Regeneration may change container IDs/hashes or codec padding between FFmpeg bui
 The bounded inspector supports a narrow recorder profile: one Opus track in non-laced WebM blocks, or one AAC (`mp4a`) track in MP4, including fragmented sample timing. It rejects unsupported structures, inconsistent bounds, excessive metadata work and indeterminate durations. It does not decode audio or prove codec payload validity; Sarvam performs decoding. Coded timelines are conservative about padding: stop recording at about 28 seconds as the speech research recommends. Actual phone compatibility and Worker CPU still require live verification.
 
 Format references: [Matroska elements](https://www.matroska.org/technical/elements.html), [Opus RFC 6716 §3](https://www.rfc-editor.org/rfc/rfc6716.html#section-3), [ISO BMFF byte stream structure](https://www.w3.org/TR/mse-byte-stream-format-isobmff/).
+
+
+## TTS transport fixture (P0-9)
+
+`tts-silence-16000.mp3` is generated silence, independently probed as MP3 at 16 kHz, 0.250000 seconds, 1,520 bytes. Reproduce it with:
+
+```bash
+ffmpeg -hide_banner -loglevel error -y -f lavfi -i anullsrc=r=16000:cl=mono -t 0.25 -c:a libmp3lame -b:a 32k src/lib/server-client/fixtures/tts-silence-16000.mp3
+ffprobe -v error -show_entries stream=codec_name,sample_rate -show_entries format=duration,size -of json src/lib/server-client/fixtures/tts-silence-16000.mp3
+```
+
+This fixture verifies raw-byte transport and format checks, not real Sarvam voice quality, 20-second size or phone playback. Oversize tests pad these bytes solely to exercise storage budget decisions. MP3 validation checks a bounded ID3 prefix and first MPEG-2 Layer III / 16-kHz frame header; it is not a full audio decoder.
