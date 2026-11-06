@@ -1,5 +1,5 @@
 // Web app manifest, built to /manifest.webmanifest under static export (nextjs-pwa.md).
-// Owner: frontend. Icons (192 and 512 PNG) are added in hours 28–34.
+// Owner: frontend. Local 192/512 PNGs match the landscape app icon in the header.
 import type { MetadataRoute } from "next";
 
 export const dynamic = "force-static";
