@@ -11,12 +11,14 @@ const rpc = vi.hoisted(() => ({
   writeContract: vi.fn(),
   waitForTransactionReceipt: vi.fn(),
   getCode: vi.fn(),
+  getTransactionCount: vi.fn(),
 }));
 vi.mock("../rpc", () => ({
   sepoliaPublicClient: () => ({
     readContract: rpc.readContract,
     waitForTransactionReceipt: rpc.waitForTransactionReceipt,
     getCode: rpc.getCode,
+    getTransactionCount: rpc.getTransactionCount,
   }),
   sepoliaWalletClient: () => ({ writeContract: rpc.writeContract }),
 }));
@@ -28,6 +30,7 @@ const locality = { name: "Dharavi", pinCode: "400017" };
 
 beforeEach(() => {
   vi.resetAllMocks();
+  rpc.getTransactionCount.mockResolvedValue(5);
   vi.stubEnv("NEXT_PUBLIC_PATA_REGISTRY", registry);
   rpc.readContract.mockImplementation(async ({ functionName, args }) => {
     if (functionName === "predictProxyAddress")
@@ -211,6 +214,9 @@ describe("household ENS setup", () => {
       grantRegistry,
     });
     const [resolverCall, registryCall] = rpc.writeContract.mock.calls.map(([call]) => call);
+    // A lagging write node once refilled nonce 0 for the second deploy; the nonces are now numbered here.
+    expect([resolverCall.nonce, registryCall.nonce]).toEqual([5, 6]);
+    expect(rpc.getTransactionCount).toHaveBeenCalledTimes(1);
     expect(resolverCall.address).toBe(ENS.verifiableFactory);
     expect(resolverCall.functionName).toBe("deployProxy");
     expect(resolverCall.args[0]).toBe(ENS.permissionedResolverImpl);

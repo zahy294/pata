@@ -89,6 +89,9 @@ export async function deployHouseholdContracts(
   const calls = localityCalls(fullName, locality);
   const client = sepoliaPublicClient();
   const wallet = sepoliaWalletClient(keys.account);
+  // Writes go to a load-balanced RPC that can lag the read path, so its nonce fill can reuse a nonce the
+  // first deploy already mined (seen 2026-11-06). Number the deploys here instead.
+  let nextNonce: number | undefined;
   async function deploy(implementation: Hex, salt: bigint, data: Hex): Promise<Hex> {
     try {
       const predicted = await client.readContract({
@@ -109,6 +112,8 @@ export async function deployHouseholdContracts(
           throw new Error("Unexpected household implementation");
         return predicted;
       }
+      const nonce =
+        nextNonce ?? (await client.getTransactionCount({ address: keys.address, blockTag: "pending" }));
       const hash = await wallet.writeContract({
         chain: sepolia,
         account: keys.account,
@@ -116,7 +121,9 @@ export async function deployHouseholdContracts(
         abi: verifiableFactoryAbi,
         functionName: "deployProxy",
         args: [implementation, salt, data],
+        nonce,
       });
+      nextNonce = nonce + 1;
       const receipt = await client.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error("Household contract deployment failed");
       const events = parseEventLogs({
