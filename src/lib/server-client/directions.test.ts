@@ -23,15 +23,15 @@ it("posts signed, schema-stripped direction inputs and validates the three-langu
   expect(new Headers(init?.headers).has("x-pata-signature")).toBe(true);
 });
 
-it("posts text to the signed speech-out route and returns raw MP3 bytes", async () => {
+it("posts text to the signed speech-out route and returns raw AAC bytes", async () => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
-  const mp3 = await recordingFixture("tts-silence-16000.mp3");
+  const aac = await recordingFixture("tts-silence-8000.aac");
   const network = vi
     .fn<typeof fetch>()
-    .mockResolvedValue(new Response(mp3, { headers: { "content-type": "audio/mpeg" } }));
+    .mockResolvedValue(new Response(aac, { headers: { "content-type": "audio/aac" } }));
   vi.stubGlobal("fetch", network);
   await expect(textToSpeech(await testHouseholdKeys(), directions.en, "en")).resolves.toEqual(
-    new Uint8Array(mp3),
+    new Uint8Array(aac),
   );
   expect(String(network.mock.calls[0][0])).toBe("https://worker.test/speech/out");
   expect(JSON.parse(String(network.mock.calls[0][1]?.body))).toEqual({ text: directions.en, language: "en" });
@@ -39,9 +39,9 @@ it("posts text to the signed speech-out route and returns raw MP3 bytes", async 
 });
 
 it.each([
-  { body: new Uint8Array([1, 2, 3]), type: "audio/mpeg" },
+  { body: new Uint8Array([1, 2, 3]), type: "audio/aac" },
   { body: new Uint8Array([1, 2, 3]), type: "application/json" },
-  { body: new Uint8Array(1024 * 1024 + 1), type: "audio/mpeg" },
+  { body: new Uint8Array(1024 * 1024 + 1), type: "audio/aac" },
 ])("rejects wrong, malformed or excessive audio", async ({ body, type }) => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   vi.stubGlobal(

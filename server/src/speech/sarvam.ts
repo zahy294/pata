@@ -1,12 +1,12 @@
 // Sarvam. Owner: AI/ML. Read docs/research/speech.md. Auth header `api-subscription-key`.
 // Speech in:  saaras:v4, mode codemix, at most 30 s (P0-7; Marathi is P1-7).
-// Speech out: bulbul:v4-flash, mp3, 16 kHz, at most 2,500 chars (P0-9).
+// Speech out: bulbul:v4-flash, AAC (ADTS), 8 kHz, about 5 KiB a second, at most 2,500 chars (P0-9).
 import type { Language } from "../../../shared/domain";
 import { SARVAM_LANGUAGE_CODE } from "../../../shared/domain";
 import { Language as LanguageSchema, SpeechOutRequest } from "../../../shared/api";
 import { z } from "zod";
 import { inspectRecording, RecordingInputError } from "../../../src/lib/server-client/recording";
-import { assertMp3, MAX_MP3_RESPONSE_BYTES } from "../../../src/lib/server-client/mp3";
+import { assertAac, MAX_AUDIO_RESPONSE_BYTES } from "../../../src/lib/server-client/aac";
 
 export async function transcribe(
   apiKey: string,
@@ -55,8 +55,9 @@ export async function synthesize(apiKey: string, text: string, language: Languag
         language_code: SARVAM_LANGUAGE_CODE[input.language],
         model: "bulbul:v4-flash",
         speaker: voices[input.language],
-        output_audio_codec: "mp3",
-        speech_sample_rate: 16000,
+        output_audio_codec: "aac",
+        // Measured 2026-11-06: MP3 is 128 kbps even at 16 kHz (~340 KB for 20 s); AAC at 8 kHz is ~41 kbps.
+        speech_sample_rate: 8000,
       }),
       signal: AbortSignal.timeout(60_000),
     });
@@ -67,12 +68,12 @@ export async function synthesize(apiKey: string, text: string, language: Languag
     const { audios } = z
       .object({ audios: z.array(z.string().min(1)).length(1) })
       .parse(await response.json());
-    if (audios[0].length > 4 * Math.ceil(MAX_MP3_RESPONSE_BYTES / 3)) throw new Error();
+    if (audios[0].length > 4 * Math.ceil(MAX_AUDIO_RESPONSE_BYTES / 3)) throw new Error();
     const decoded = atob(audios[0]);
     const result = new ArrayBuffer(decoded.length);
     const bytes = new Uint8Array(result);
     for (let i = 0; i < decoded.length; i++) bytes[i] = decoded.charCodeAt(i);
-    assertMp3(bytes);
+    assertAac(bytes);
     return result;
   } catch {
     throw new Error("Speech synthesis unavailable");

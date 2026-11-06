@@ -30,12 +30,8 @@ const CandidatePin = z.object({
   confidence: z.enum(["low", "medium", "high"]),
   metresFromLandmark: z.number(),
 });
-const Address = z.custom<`0x${string}`>(
-  (v) => typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v),
-);
-const Hex = z.custom<`0x${string}`>(
-  (v) => typeof v === "string" && /^0x[0-9a-fA-F]*$/.test(v),
-);
+const Address = z.custom<`0x${string}`>((v) => typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v));
+const Hex = z.custom<`0x${string}`>((v) => typeof v === "string" && /^0x[0-9a-fA-F]*$/.test(v));
 
 // ---- Signed requests ----
 // Every route except GET /health needs these headers, signed by the household account
@@ -48,11 +44,7 @@ export const SIGNATURE_HEADERS = {
 } as const;
 
 /** The exact string the household signs. `bodySha256` is lowercase hex of SHA-256 over the raw body bytes. */
-export function signedMessage(
-  route: string,
-  timestamp: number,
-  bodySha256: string,
-): string {
+export function signedMessage(route: string, timestamp: number, bodySha256: string): string {
   return `pata:v1:${route}:${timestamp}:${bodySha256}`;
 }
 
@@ -113,11 +105,7 @@ export const RankResponse = z.object({
 export const DirectionsRequest = z.object({
   wayToTheDoor: z.string().min(3).max(2000),
   pin: LatLon,
-  landmarks: z
-    .array(
-      z.object({ feature: OsmFeature, relation: Relation, metres: z.number() }),
-    )
-    .max(5),
+  landmarks: z.array(z.object({ feature: OsmFeature, relation: Relation, metres: z.number() })).max(5),
 });
 export const DirectionsResponse = z.object({
   directions: z.object({ hi: z.string(), mr: z.string(), en: z.string() }),
@@ -126,7 +114,7 @@ export const DirectionsResponse = z.object({
 /** POST /speech/in?lang=hi: body is the raw recording (audio/webm or audio/mp4, ≤ 30 s). */
 export const SpeechInResponse = z.object({ transcript: z.string() });
 
-/** POST /speech/out: returns audio/mpeg bytes (MP3, 16 kHz). */
+/** POST /speech/out: returns audio/aac bytes (ADTS AAC, 8 kHz). */
 export const SpeechOutRequest = z.object({
   text: z.string().min(1).max(2500),
   language: Language,
