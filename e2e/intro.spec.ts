@@ -1,5 +1,21 @@
 import { expect, test } from "@playwright/test";
 
+test("the minimal intro places the logo left, Hindi right and keeps only the core message", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const intro = page.getByRole("dialog", { name: "Welcome to Pata" });
+  const logo = intro.getByRole("img", { name: "Pata app icon" });
+  await expect(logo).toBeVisible();
+  const logoBox = await logo.boundingBox();
+  const hindiBox = await intro.getByText("पता", { exact: true }).boundingBox();
+  expect(logoBox!.x).toBeLessThan(hindiBox!.x);
+  await expect(intro.getByRole("heading", { name: "Your door. Your say." })).toBeVisible();
+  await expect(
+    intro.getByText(/A little closer|Every home|Give your home a name|Share the way|shared only by consent/),
+  ).toHaveCount(0);
+});
+
 test("the styled intro fills the viewport and renders the oversized wordmark", async ({ page }) => {
   await page.goto("/");
   const intro = page.getByRole("dialog", { name: "Welcome to Pata" });

@@ -54,6 +54,7 @@ export default function SetupPage() {
 
   // Step 1: Sign in
   const [screen, setScreen] = useState<FlowScreen>("signin");
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }, [screen]);
   const [keys, setKeys] = useState<HouseholdKeys | null>(null);
   const [signInLoading, setSignInLoading] = useState(true);
   const [signInError, setSignInError] = useState<string | null>(null);
@@ -366,7 +367,7 @@ export default function SetupPage() {
       createStep === "save");
 
   return (
-    <main className="flex flex-col gap-5 pb-8">
+    <main className="pata-setup-page flex flex-col gap-5 pb-8">
       {/* STEP 1: SIGN IN */}
       {screen === "signin" && (
         <section className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-6 shadow-sm">
@@ -679,7 +680,7 @@ export default function SetupPage() {
 
       {/* STEP 4 & 5: CONFIRMED DIGIPIN + SPOKEN DIRECTIONS */}
       {screen === "directions" && confirmedPin && (
-        <div className="flex flex-col gap-4">
+        <div className="pata-directions-step">
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
               Step 3 of 4 • Door Code & Audio

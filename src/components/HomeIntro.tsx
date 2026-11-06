@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import Image from "next/image";
 import "./HomeIntro.css";
 const SESSION_KEY = "pata.intro.seen.v1";
 const serverSeen = () => false;
@@ -81,7 +82,7 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
           ref={dialogRef}
           open
           aria-label="Welcome to Pata"
-          aria-describedby="intro-description"
+          aria-describedby="intro-tagline"
           className="pata-intro"
           data-opening={phase === "opening"}
           onCancel={(event) => {
@@ -104,35 +105,34 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
           <div className={`pata-intro__door pata-intro__right`} aria-hidden="true" />
           <div className="pata-intro__composition">
             <div className="pata-intro__masthead">
+              <Image
+                className="pata-intro__logo"
+                src="/pata-app-icon.svg"
+                alt="Pata app icon"
+                width={48}
+                height={48}
+                priority
+              />
               <span lang="hi" className="pata-intro__hindi">
                 पता
               </span>
-              <span className="pata-intro__mastheadNote">
-                A little closer
-                <br />
-                to home.
-              </span>
             </div>
-            <div className="pata-intro__hero">
-              <svg className="pata-intro__doorway" viewBox="0 0 320 380" fill="none" aria-hidden="true">
-                <path d="M36 374V145a124 124 0 0 1 248 0v229M52 374V145a108 108 0 0 1 216 0v229" />
-                <path d="M16 374h288M160 24V8M28 145H12m296 0h-16" />
-                <circle cx="160" cy="8" r="3" />
-              </svg>
-              <h1 className="pata-intro__wordmark">Pata</h1>
-              <span className="pata-intro__heroCaption">Every home. Its own story.</span>
-            </div>
-            <div className="pata-intro__message">
-              <h2>
-                Your door.
-                <br />
-                <em>Your say.</em>
-              </h2>
-              <p id="intro-description">
-                Give your home a name.
-                <br />
-                Share the way, on your terms.
-              </p>
+            <div className="pata-intro__center">
+              <div className="pata-intro__hero">
+                <svg className="pata-intro__doorway" viewBox="0 0 320 380" fill="none" aria-hidden="true">
+                  <path d="M36 374V145a124 124 0 0 1 248 0v229M52 374V145a108 108 0 0 1 216 0v229" />
+                  <path d="M16 374h288M160 24V8M28 145H12m296 0h-16" />
+                  <circle cx="160" cy="8" r="3" />
+                </svg>
+                <h1 className="pata-intro__wordmark">Pata</h1>
+              </div>
+              <div className="pata-intro__message">
+                <h2 id="intro-tagline">
+                  Your door.
+                  <br />
+                  <em>Your say.</em>
+                </h2>
+              </div>
             </div>
             <div className="pata-intro__actions">
               <button
@@ -148,7 +148,6 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
                   </svg>
                 </span>
               </button>
-              <p className="pata-intro__footer">Your door, shared only by consent.</p>
             </div>
           </div>
         </dialog>

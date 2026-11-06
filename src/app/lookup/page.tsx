@@ -81,7 +81,7 @@ export default function LookupPage() {
   };
 
   return (
-    <main className="flex flex-col gap-5 pb-10">
+    <main className="pata-lookup-page flex flex-col gap-5 pb-10">
       <div className="flex flex-col gap-1">
         <span className="inline-flex self-start items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
           Public Directory

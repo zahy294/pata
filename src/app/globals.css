@@ -1,1 +1,118 @@
 @import "tailwindcss";
+
+:root {
+  --page-gutter: clamp(20px, 4vw, 48px);
+  --page-width: 1120px;
+}
+.pata-shell {
+  min-height: 100svh;
+}
+.pata-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid #e6dac6;
+  background: #faf5ec;
+}
+.pata-header-inner {
+  display: flex;
+  min-height: 72px;
+  width: calc(100% - var(--page-gutter) * 2);
+  max-width: var(--page-width);
+  margin-inline: auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.pata-header-wordmark {
+  font-size: 28px;
+}
+.pata-app-content {
+  width: 100%;
+  max-width: calc(var(--page-width) + var(--page-gutter) * 2);
+  margin-inline: auto;
+  padding: 32px var(--page-gutter) 64px;
+}
+.pata-app-content main {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  gap: 24px;
+}
+.pata-app-content main h1 {
+  max-width: 32ch;
+  font-size: clamp(22px, 2.1vw, 28px);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.pata-app-content main h1 + p {
+  max-width: 65ch;
+  line-height: 1.7;
+}
+.pata-app-content h1[tabindex="-1"]:focus {
+  outline: none;
+}
+.pata-app-content main > section,
+.pata-setup-page > div > section {
+  padding: clamp(20px, 2vw, 28px);
+}
+.pata-setup-page > div {
+  row-gap: 24px;
+}
+.pata-setup-page > div > div:first-child {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pata-directions-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+.pata-directions-step > * {
+  min-width: 0;
+}
+@media (min-width: 900px) {
+  .pata-header-inner {
+    min-height: 88px;
+  }
+  .pata-header-wordmark {
+    font-size: 30px;
+  }
+  .pata-app-content {
+    padding-top: 48px;
+  }
+  .pata-setup-page > div:not(.pata-directions-step) {
+    max-width: 760px;
+    width: 100%;
+    margin-inline: auto;
+  }
+  .pata-directions-step {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: start;
+  }
+  .pata-directions-step > div:nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+  .pata-directions-step > button:first-of-type {
+    grid-column: 2;
+    grid-row: 4;
+    max-width: 400px;
+    justify-self: end;
+  }
+  .pata-directions-step > button:last-of-type {
+    grid-column: 1;
+    grid-row: 4;
+    justify-self: start;
+    align-self: center;
+  }
+  .pata-app-content .pata-home-page,
+  .pata-app-content .pata-lookup-page {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: start;
+    gap: 48px;
+  }
+  .pata-lookup-page > section {
+    grid-column: 1 / -1;
+  }
+}

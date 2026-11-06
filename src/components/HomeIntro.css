@@ -1,7 +1,6 @@
 .pata-intro {
   --intro-bg: #123b2b;
   --intro-cream: #faf5ec;
-  --intro-muted: #c6d3c5;
   --intro-gold: #e4c07a;
   position: fixed;
   inset: 0;
@@ -39,11 +38,9 @@
 }
 .pata-intro__left {
   left: 0;
-  transform-origin: left center;
 }
 .pata-intro__right {
   right: 0;
-  transform-origin: right center;
 }
 .pata-intro[data-opening="true"] .pata-intro__left {
   transform: translateX(-101%);
@@ -53,12 +50,12 @@
 }
 .pata-intro__composition {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 100%;
-  width: min(100%, 640px);
+  width: min(100%, 1120px);
   margin-inline: auto;
-  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  padding: max(24px, env(safe-area-inset-top)) clamp(24px, 4vw, 48px) max(24px, env(safe-area-inset-bottom));
   opacity: 1;
   transition:
     opacity 160ms ease,
@@ -73,33 +70,38 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid rgb(228 192 122 / 23%);
+}
+.pata-intro__logo {
+  width: 48px;
+  height: 48px;
 }
 .pata-intro__hindi {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 32px;
   line-height: 1;
 }
-.pata-intro__mastheadNote {
-  font-size: 12px;
-  line-height: 1.4;
-  text-align: right;
-  color: var(--intro-muted);
+.pata-intro__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding-block: 32px;
 }
 .pata-intro__hero {
   position: relative;
   display: flex;
-  flex: 1 0 auto;
-  flex-direction: column;
+  flex: none;
   align-items: center;
   justify-content: center;
-  min-height: clamp(280px, 43svh, 400px);
-  margin-top: 24px;
+  height: clamp(220px, 36svh, 340px);
+  width: min(100%, 480px);
 }
 .pata-intro__doorway {
   position: absolute;
-  top: 0;
   height: 100%;
   width: min(88%, 320px);
   stroke: var(--intro-gold);
@@ -110,27 +112,19 @@
   position: relative;
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(120px, 35vw, 192px);
+  font-size: clamp(96px, 26vw, 156px);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
 }
-.pata-intro__heroCaption {
-  position: relative;
-  margin-top: 12px;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--intro-muted);
-}
 .pata-intro__message {
-  padding-block: 24px 32px;
   text-align: center;
 }
 .pata-intro__message h2 {
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(30px, 7.5vw, 42px);
-  line-height: 1.1;
+  font-size: clamp(28px, 6vw, 36px);
+  line-height: 1.15;
   font-weight: 400;
   letter-spacing: -0.025em;
 }
@@ -138,27 +132,24 @@
   color: var(--intro-gold);
   font-weight: 400;
 }
-.pata-intro__message p {
-  margin-top: 16px;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--intro-muted);
-}
 .pata-intro__actions {
-  padding-top: 8px;
+  width: 100%;
+  max-width: 320px;
+  justify-self: center;
 }
 .pata-intro__enter {
   display: flex;
   width: 100%;
-  min-height: 64px;
+  min-height: 56px;
   align-items: center;
   justify-content: space-between;
+  gap: 24px;
   padding: 8px 8px 8px 24px;
   border: 1px solid var(--intro-cream);
   border-radius: 999px;
   background: var(--intro-cream);
   color: var(--intro-bg);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -178,8 +169,8 @@
 }
 .pata-intro__arrow {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   place-items: center;
   background: var(--intro-bg);
@@ -193,48 +184,32 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.pata-intro__footer {
-  margin: 16px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  text-align: center;
-  color: var(--intro-muted);
-}
 @media (hover: hover) {
   .pata-intro__enter:hover {
     background-color: #ffe4a8;
   }
 }
-@media (min-width: 700px) {
+@media (min-width: 900px) {
   .pata-intro__composition {
-    padding-inline: 48px;
+    padding-block: 40px;
   }
-  .pata-intro__hero {
-    min-height: 400px;
-  }
-  .pata-intro__actions {
-    max-width: 400px;
-    width: 100%;
-    align-self: center;
+  .pata-intro__hindi {
+    font-size: 36px;
   }
 }
-@media (max-height: 740px) {
+@media (max-height: 620px) {
   .pata-intro__composition {
-    padding-top: 16px;
-    padding-bottom: 16px;
-  }
-  .pata-intro__hero {
-    min-height: 240px;
-    margin-top: 16px;
-  }
-  .pata-intro__message {
     padding-block: 16px;
   }
-  .pata-intro__message h2 {
-    font-size: 30px;
+  .pata-intro__center {
+    gap: 16px;
+    padding-block: 16px;
   }
-  .pata-intro__message p {
-    margin-top: 12px;
+  .pata-intro__hero {
+    height: 190px;
+  }
+  .pata-intro__message h2 {
+    font-size: 28px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
