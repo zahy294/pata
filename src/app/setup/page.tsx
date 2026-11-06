@@ -13,6 +13,7 @@
 // 7. → flows.createHousehold(...) with a progress list ("Reserving your name…", "Saving your home, locked…").
 //    Then go to /.
 import { useEffect, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import { useRouter } from "next/navigation";
 import Recorder from "../../components/Recorder";
 import PinPicker from "../../components/PinPicker";
@@ -382,7 +383,7 @@ export default function SetupPage() {
 
           {signInLoading && (
             <div className="mt-5 flex items-center gap-3 rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-4 text-sm font-medium text-[#1F1C18]">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+              <MorphLoader size={24} color="#046A38" />
               <span>Preparing your private device key…</span>
             </div>
           )}
@@ -586,7 +587,7 @@ export default function SetupPage() {
                 className="mt-3 w-full rounded-xl bg-[#B8862D] px-4 py-2.5 text-xs font-semibold text-[#FFFDF9] transition hover:bg-[#9E7122] disabled:opacity-50"
               >
                 {pinsLoading
-                  ? "Searching neighbourhood…"
+                  ? <span className="inline-flex items-center gap-2"><MorphLoader />Searching neighbourhood…</span>
                   : "Continue with Area & PIN →"}
               </button>
             </section>
@@ -622,7 +623,7 @@ export default function SetupPage() {
             >
               {describeLoading || pinsLoading ? (
                 <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                  <MorphLoader />
                   <span>Finding nearby landmarks…</span>
                 </>
               ) : (
@@ -744,7 +745,7 @@ export default function SetupPage() {
 
             {directionsLoading && (
               <div className="mt-3 flex items-center gap-3 rounded-xl bg-[#FAF5EC] p-4 text-sm text-[#1F1C18]">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#B8862D] border-t-transparent" />
+                <MorphLoader size={24} color="#B8862D" />
                 <span>Generating Hindi, Marathi, and English voice guides…</span>
               </div>
             )}
@@ -897,7 +898,7 @@ export default function SetupPage() {
                   Invalid format
                 </span>
               ) : availabilityStatus === "checking" ? (
-                <span className="font-medium text-[#8A5F14]">Checking…</span>
+                <span className="inline-flex items-center gap-2 font-medium text-[#8A5F14]"><MorphLoader size={18} />Checking…</span>
               ) : availabilityStatus === "available" ? (
                 <span className="rounded-full bg-[#E3F2E8] px-2.5 py-0.5 font-semibold text-[#046A38]">
                   ✓ Available
@@ -1018,7 +1019,7 @@ export default function SetupPage() {
           >
             {creating ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                <MorphLoader />
                 <span>Saving your home…</span>
               </>
             ) : (

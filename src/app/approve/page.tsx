@@ -6,6 +6,7 @@
 // Approve → share sheet (navigator.share) + QR code (components/QrCode) of the courier link.
 // The stage grant is 20 seconds.
 import { useEffect, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import QrCode from "../../components/QrCode";
 import { fromBase64Url, toBase64Url } from "../../lib/link";
 import { ARKIV_MAX_DAYS, GRANT_LATENCY_MARGIN_SECONDS } from "../../../shared/constants";
@@ -442,7 +443,7 @@ export default function ApprovePage() {
           >
             {approving ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                <MorphLoader />
                 <span>Creating temporary link…</span>
               </>
             ) : (
