@@ -120,13 +120,44 @@ it("resumes a failed final save without deploying, registering or creating a sec
   expect(JSON.stringify(checkpoint)).not.toContain(input.roomNumber);
 });
 
-it("does not send a second home create when the first write's outcome is uncertain", async () => {
+it("recovers the home entity after a lost response instead of permanently blocking setup", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
-  io.createEntity.mockRejectedValue(new Error("lost response after send; private URL"));
+  let rows: unknown[] = [];
+  io.arkivRequest.mockImplementation(async () => ({ data: rows, blockNumber: "0x1" }));
+  io.createEntity.mockImplementation(async (_schema, values) => {
+    rows = [
+      {
+        key: entityKey,
+        owner: keys.address,
+        attributes: [
+          { name: "arkiv.schema", type: "str", value: "pata.home.v1" },
+          { name: "sealed", type: "bytes", value: values.sealed.value },
+        ],
+      },
+    ];
+    throw new Error("lost response after send; private URL");
+  });
   await expect(createHousehold(keys, input)).rejects.toThrow();
-  await expect(createHousehold(keys, input)).rejects.toThrow("needs transaction verification");
+  expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
   expect(io.createEntity).toHaveBeenCalledTimes(1);
-  expect(saved).toBeNull();
+  expect(saved).not.toBeNull();
+});
+
+it("recovers a resolver mined before an interrupted deployment result was saved", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const normalReceipt = io.waitReceipt.getMockImplementation()!;
+  let interrupted = false;
+  io.waitReceipt.mockImplementation(async (request) => {
+    if (request.hash === "0x02" && !interrupted) {
+      interrupted = true;
+      throw new Error("registry send failed");
+    }
+    return normalReceipt(request);
+  });
+  await expect(createHousehold(keys, input)).rejects.toThrow("Could not deploy household contract");
+  io.getCode.mockResolvedValue("0x6000");
+  expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
+  expect(io.writeContract).toHaveBeenCalledTimes(2);
 });
 
 it("rejects invalid names and locality before asking the relay for funds", async () => {
@@ -145,12 +176,14 @@ it("never exposes relay errors containing request bodies or URLs", async () => {
   await expect(createHousehold(keys, input)).rejects.toThrow(/^Could not fund household on sepolia$/);
 });
 
-it("sanitizes registration failures and stops a retry from repeating an uncertain registration", async () => {
+it("retries registration safely when the server reconciles a lost response with a null hash", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
-  io.registerName.mockRejectedValue(new Error("SECRET_REQUEST_BODY_AND_URL"));
+  io.registerName
+    .mockRejectedValueOnce(new Error("SECRET_REQUEST_BODY_AND_URL"))
+    .mockResolvedValue({ txHash: null });
   await expect(createHousehold(keys, input)).rejects.toThrow(/^Could not register household name$/);
-  await expect(createHousehold(keys, input)).rejects.toThrow("needs transaction verification");
-  expect(io.registerName).toHaveBeenCalledTimes(1);
+  expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
+  expect(io.registerName).toHaveBeenCalledTimes(2);
 });
 
 it("rechecks a known registration transaction after a receipt timeout without requesting another registration", async () => {
@@ -237,12 +270,12 @@ it("allows a new registration only after its previous transaction is confirmed r
   expect(io.writeContract).toHaveBeenCalledTimes(2);
 });
 
-it("does not repeat a top-up request whose response was lost", async () => {
+it("retries a lost top-up response through the server's repeat-safe endpoint", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
-  io.topup.mockRejectedValue(new Error("lost funding response"));
+  io.topup.mockRejectedValueOnce(new Error("lost funding response"));
   await expect(createHousehold(keys, input)).rejects.toThrow("Could not fund household");
-  await expect(createHousehold(keys, input)).rejects.toThrow("needs transaction verification");
-  expect(io.topup).toHaveBeenCalledTimes(1);
+  expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
+  expect(io.topup.mock.calls.filter(([, request]) => request.chain === "sepolia")).toHaveLength(2);
 });
 
 it("rejects a home larger than Arkiv's sealed bytes budget before requesting funds", async () => {

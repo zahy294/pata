@@ -182,8 +182,9 @@ export async function createHousehold(
     )
       throw new Error("Resume setup with the original household details");
     const save = () => saveSetupCheckpoint(keys.address, checkpoint);
-    if (checkpoint.pending)
-      throw new Error(`Setup ${checkpoint.pending} needs transaction verification before retrying`);
+    // Old journals may retain an intent after a crash. Each remaining step reconciles
+    // through the server, predicted proxy code or owner-filtered record discovery.
+    delete checkpoint.pending;
     await save();
     for (const chain of ["sepolia", "arkiv"] as const) {
       const field = chain === "sepolia" ? "sepoliaFunded" : "arkivFunded";
@@ -193,7 +194,9 @@ export async function createHousehold(
       if (!fundingHash) {
         checkpoint.pending = chain === "sepolia" ? "topup-sepolia" : "topup-arkiv";
         await save();
-        const response = await topup(keys, { chain }).catch(() => {
+        const response = await topup(keys, { chain }).catch(async () => {
+          delete checkpoint.pending;
+          await save();
           throw new Error(`Could not fund household on ${chain}`);
         });
         delete checkpoint.pending;
@@ -225,9 +228,13 @@ export async function createHousehold(
       if (!checkpoint.registrationHash) {
         checkpoint.pending = "register";
         await save();
-        const registration = await registerName(keys, { label: input.label, ...contracts }).catch(() => {
-          throw new Error("Could not register household name");
-        });
+        const registration = await registerName(keys, { label: input.label, ...contracts }).catch(
+          async () => {
+            delete checkpoint.pending;
+            await save();
+            throw new Error("Could not register household name");
+          },
+        );
         // The relay can confirm existing ownership without a saved transaction hash.
         // Universal owner/locality resolution below remains mandatory in this case.
         checkpoint.registrationHash = registration.txHash ?? undefined;
