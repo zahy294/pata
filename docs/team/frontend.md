@@ -44,8 +44,8 @@ Build src/app/setup/page.tsx as a step-by-step flow following the comment at the
 2. "How do people find your door?": src/components/Recorder.tsx (MediaRecorder, max 30 s, shows a timer) OR a textarea; language picker hi/mr/en; a SEPARATE input "Room or flat number" with the note "Stays on this phone". → flows.describeTheWay(keys, blobOrText, language). If locality is null, ask for the area and PIN code.
 3. → flows.findCandidatePins(...). src/components/PinPicker.tsx shows up to 3 candidates on MapView with landmark name, relation and confidence (low/medium/high as words, not numbers). Empty → "Drop a pin on your door" on the locality's bbox. The household can drag any pin.
 4. Confirm → show the DIGIPIN with formatDigipin from src/lib/digipin.
-5. → flows.makeDirections(...): show the three directions texts with play buttons (AudioPlayer).
-6. Name: suggestHouseholdLabel() as a default, an input for her own with the rule from isValidHouseholdLabel (ADR 0006) and a warning that names are public; check availability with householdLabelStatus.
+5. → flows.makeDirections(...): show the three directions texts with play buttons (AudioPlayer). A language missing from `clips` plays with speechSynthesis; pass `clips` to createHousehold as `voiceClips` unchanged.
+6. Name: flows.suggestHouseholdLabel() as a default, an input for her own with the rule from isValidHouseholdLabel (ADR 0006) and a warning that names are public; check availability with flows.checkHouseholdName ("available", "taken" or "invalid").
 7. → flows.createHousehold(...) with a progress list ("Reserving your name…", "Saving your home, locked…"). Then go to /.
 Use src/lib/flows/fake.ts until the real flows land. Every async step needs a loading state and a retry button; errors show a plain sentence, never a raw error message (it may contain request bodies).
 Done when the whole flow runs end to end on fake data on localhost and on a phone. Commit per step, push.
@@ -82,7 +82,7 @@ Done when the fake live → ended transition works on a phone. Commit, push.
 Read AGENTS.md, docs/team/frontend.md, src/lib/ens/lookup.ts and src/lib/keys/store.ts.
 Ticket: P0-13. Write docs/plans/P0-13.md first and commit it.
 1. src/app/page.tsx: signed out → "Set up your home" button. Signed in (loadHouseholdState) → the household name, its locality, and buttons for "Who can find my door" and "History". Remove the dev list of screens.
-2. src/app/lookup/page.tsx: an input for a name. A household name → lookupLocality → shows only "Dharavi, 400017" and the sentence "Only people you give a link to can see the door." A 10-character grid name (or a DIGIPIN) → resolveGridName → a pin on the map (P1-1; show "coming soon" until it's real).
+2. src/app/lookup/page.tsx: an input for a name. A household name → lookupHousehold from src/lib/flows/lookup.ts (accepts "blue-gate" or "blue-gate.pata.eth") → shows only `${name}, ${pinCode}`, e.g. "Dharavi, 400017" and the sentence "Only people you give a link to can see the door." A 10-character grid name (or a DIGIPIN) → resolveGridName → a pin on the map (P1-1; show "coming soon" until it's real).
 Done when both work against the real flows. Commit, push.
 ```
 

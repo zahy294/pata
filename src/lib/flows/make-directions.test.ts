@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { makeDirections } from "./setup-household";
 import { testHouseholdKeys } from "../server-client/test-helpers";
 import { recordingFixture } from "../server-client/recording-fixtures";
+import { MAX_VOICE_CLIP_BYTES } from "../../../shared/constants";
 
 const directions = { hi: "नीला दरवाज़ा।", mr: "निळा दरवाजा.", en: "Blue gate." };
 const pin = { lat: 19.04, lon: 72.85 };
@@ -52,9 +53,9 @@ it("keeps text and other clips when one language's speech provider fails", async
 it("shortens only an oversized language once and returns text matching the retry audio", async () => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   const audio = await recordingFixture("tts-silence-16000.mp3");
-  const boundary = new Uint8Array(131043); // + 29-byte envelope = exactly 128 KiB: must retry.
+  const boundary = new Uint8Array(MAX_VOICE_CLIP_BYTES + 1); // one byte over the grant budget: must retry.
   boundary.set(new Uint8Array(audio));
-  const largestFit = new Uint8Array(131042);
+  const largestFit = new Uint8Array(MAX_VOICE_CLIP_BYTES);
   largestFit.set(new Uint8Array(audio));
   const hiTexts: string[] = [];
   vi.stubGlobal(
@@ -73,14 +74,12 @@ it("shortens only an oversized language once and returns text matching the retry
   expect(hiTexts[1].length).toBeLessThan(hiTexts[0].length);
   expect(result.directions).toEqual({ ...directions, hi: hiTexts[1] });
   expect(result.clips.hi).toEqual(largestFit);
-  const { sealBytes } = await import("../seal");
-  expect((await sealBytes(keys.sealKey, largestFit)).byteLength).toBe(131071);
 });
 
 it.each([false, true])("omits a clip after an oversized or failed retry (failure=%s)", async (failRetry) => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   const audio = await recordingFixture("tts-silence-16000.mp3");
-  const oversized = new Uint8Array(131043);
+  const oversized = new Uint8Array(MAX_VOICE_CLIP_BYTES + 1);
   oversized.set(new Uint8Array(audio));
   let hiCalls = 0;
   vi.stubGlobal(

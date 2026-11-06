@@ -1,9 +1,20 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { signIn } from "./setup-household";
+import { checkHouseholdName, signIn } from "./setup-household";
 
 const storage = vi.hoisted(() => ({ loadDeviceRoot: vi.fn(), saveDeviceRoot: vi.fn() }));
 vi.mock("../keys/store", () => storage);
+const labelStatus = vi.hoisted(() => vi.fn());
+vi.mock("../ens/household", () => ({ householdLabelStatus: labelStatus, deployHouseholdContracts: vi.fn() }));
 beforeEach(() => vi.resetAllMocks());
+
+it("reports a household name as available only when the pata.eth registry has it unregistered", async () => {
+  labelStatus.mockResolvedValueOnce(0).mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+  expect(await checkHouseholdName("blue-gate")).toBe("available");
+  expect(await checkHouseholdName("blue-gate")).toBe("taken");
+  expect(await checkHouseholdName("blue-gate")).toBe("taken");
+  expect(await checkHouseholdName("Blue Gate")).toBe("invalid");
+  expect(labelStatus).toHaveBeenCalledTimes(3);
+});
 
 it("persists a new device identity before returning it, and reuses it on later sign-ins", async () => {
   let root: Uint8Array | null = null;
