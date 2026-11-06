@@ -25,7 +25,7 @@ hero_stage:
   form: Oversized cream Pata lettering inside a fine doorway outline.
   relation: flat
   medium: absent
-  motion: The same Pata lettering travels into the real top-left app header; the surface separates from its center.
+  motion: The same Pata lettering travels into the real top-left app header while a circular opening expands from Enter Pata.
 intro_content:
   topLeft: Landscape app icon
   topRight: पता
@@ -44,12 +44,12 @@ motion:
   wordmarkDurationMs: 900
   surfaceDurationMs: 820
   peripheralExitMs: 380
-  colorDurationMs: 200
-  colorDelayMs: 90
+  colorDurationMs: 120
+  colorDelay: Centered on when the expanding circle reaches the traveling wordmark, measured from native easing progress
   completionFallbackMs: 1200
   easing: cubic-bezier(0.65, 0, 0.2, 1)
   destination: Measured bounds of .pata-header-wordmark, matching Georgia, weight, tracking and line-height
-  surface: One smooth circular aperture expands from the source wordmark center to beyond the farthest viewport corner
+  surface: One smooth circular aperture expands from the Enter Pata button center to beyond the farthest viewport corner
   continuity: Same visible wordmark throughout; only the destination text is hidden during flight
   reduced: Instant entry, including when the preference changes mid-flight
   interruption: Escape, resize or unavailable animation APIs finish immediately and restore header text

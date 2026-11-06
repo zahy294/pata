@@ -83,7 +83,6 @@ test("entry carries the Pata wordmark into its real top-left header position", a
   expect(halfway.x).toBeLessThan(start.x);
   expect(halfway.y).toBeLessThan(start.y);
   expect(halfway.width).toBeLessThan(start.width * 0.8);
-  expect(halfway.color).toBe("rgb(31, 28, 24)");
   const arriving = await wordmark.evaluate((node) => {
     node
       .closest("dialog")!
@@ -92,11 +91,12 @@ test("entry carries the Pata wordmark into its real top-left header position", a
         animation.currentTime = 891;
       });
     const { x, y, width, height } = node.getBoundingClientRect();
-    return { x, y, width, height };
+    return { x, y, width, height, color: getComputedStyle(node).color };
   });
   for (const dimension of ["x", "y", "width", "height"] as const) {
     expect(Math.abs(arriving[dimension] - target[dimension])).toBeLessThan(1);
   }
+  expect(arriving.color).toBe("rgb(31, 28, 24)");
   await intro.evaluate((node) =>
     node.getAnimations({ subtree: true }).forEach((animation) => animation.play()),
   );
@@ -105,11 +105,11 @@ test("entry carries the Pata wordmark into its real top-left header position", a
   await expect(page.getByRole("heading", { name: "Your door, shared only by consent." })).toBeFocused();
 });
 
-test("the intro opens in one smooth circle from the original wordmark center", async ({ page }) => {
+test("the intro opens in one smooth circle from the Enter Pata button", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   const intro = page.getByRole("dialog", { name: "Welcome to Pata" });
-  const source = (await intro.getByRole("heading", { name: "Pata", exact: true }).boundingBox())!;
+  const source = (await intro.getByRole("button", { name: "Enter Pata" }).boundingBox())!;
   await expect(intro.locator("mask circle")).toHaveCount(1);
   await page.getByRole("button", { name: "Enter Pata" }).click();
   await expect
@@ -123,12 +123,19 @@ test("the intro opens in one smooth circle from the original wordmark center", a
       });
       const circle = node.querySelector<SVGCircleElement>("mask circle")!;
       const matrix = circle.getCTM()!;
-      return { x: matrix.e, y: matrix.f, radius: circle.r.baseVal.value * Math.hypot(matrix.a, matrix.b) };
+      return {
+        x: matrix.e,
+        y: matrix.f,
+        radius: circle.r.baseVal.value * Math.hypot(matrix.a, matrix.b),
+        ink: getComputedStyle(node.querySelector("h1")!).color,
+      };
     }, time);
   const initial = await sample(0);
   expect(initial.radius).toBeLessThan(1);
   expect(Math.abs(initial.x - source.x - source.width / 2)).toBeLessThan(1);
   expect(Math.abs(initial.y - source.y - source.height / 2)).toBeLessThan(1);
+  const early = await sample(300);
+  expect(early.ink).toBe("rgb(250, 245, 236)");
   const middle = await sample(400);
   const final = await sample(820);
   expect(middle.radius).toBeGreaterThan(1);

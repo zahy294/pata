@@ -27,6 +27,7 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
   const homeRef = useRef<HTMLDivElement>(null);
   const wordmarkRef = useRef<HTMLHeadingElement>(null);
   const apertureRef = useRef<SVGCircleElement>(null);
+  const enterButtonRef = useRef<HTMLButtonElement>(null);
   const maskId = useId();
   const stopMotion = useRef<(() => void) | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -58,8 +59,17 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
       const wordmark = wordmarkRef.current;
       const dialog = dialogRef.current;
       const aperture = apertureRef.current;
+      const button = enterButtonRef.current;
       const target = document.querySelector<HTMLElement>(".pata-header-wordmark");
-      if (!wordmark || !dialog || !aperture || !target || !wordmark.animate || reducedMotion.current) {
+      if (
+        !wordmark ||
+        !dialog ||
+        !aperture ||
+        !button ||
+        !target ||
+        !wordmark.animate ||
+        reducedMotion.current
+      ) {
         finish();
         return;
       }
@@ -85,8 +95,9 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
         const x = to.left - from.left;
         const y = to.top - from.top;
         const scale = to.width / from.width;
-        const originX = from.left + from.width / 2;
-        const originY = from.top + from.height / 2;
+        const pressed = button.getBoundingClientRect();
+        const originX = pressed.left + pressed.width / 2;
+        const originY = pressed.top + pressed.height / 2;
         Object.assign(wordmark.style, {
           position: "fixed",
           left: `${from.left}px`,
@@ -115,15 +126,6 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
           timing,
         );
         animations.push(flight);
-        // Switch to the header's ink as the cream home surface opens beneath it.
-        animations.push(
-          wordmark.animate([{ color: "#FAF5EC" }, { color: getComputedStyle(target).color }], {
-            duration: 200,
-            delay: 90,
-            fill: "forwards",
-            easing: "ease-out",
-          }),
-        );
         const masthead = dialog.querySelector(".pata-intro__masthead");
         if (masthead)
           animations.push(
@@ -134,18 +136,47 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
             }),
           );
         // A black circle cuts one continuous hole out of the green luminance mask.
-        // Reach the farthest corner even when the wordmark is off-center.
+        // Reach the farthest corner from the button, including on tall phones.
         const radius =
           Math.hypot(Math.max(originX, innerWidth - originX), Math.max(originY, innerHeight - originY)) + 2;
-        animations.push(
-          aperture.animate(
-            [
-              { transform: `translate(${originX}px, ${originY}px) scale(0)` },
-              { transform: `translate(${originX}px, ${originY}px) scale(${radius})` },
-            ],
-            { ...timing, duration: 820 },
-          ),
+        const reveal = aperture.animate(
+          [
+            { transform: `translate(${originX}px, ${originY}px) scale(0)` },
+            { transform: `translate(${originX}px, ${originY}px) scale(${radius})` },
+          ],
+          { ...timing, duration: 820 },
         );
+        animations.push(reveal);
+        // Find when the button's opening reaches the traveling text. Sample the
+        // browser's actual easing curves without reading layout or painting.
+        flight.pause();
+        reveal.pause();
+        let inkAt = 820;
+        for (let time = 0; time <= 820; time += 10) {
+          flight.currentTime = time;
+          reveal.currentTime = time;
+          const p = Number(flight.effect!.getComputedTiming().progress ?? 0);
+          const q = Number(reveal.effect!.getComputedTiming().progress ?? 0);
+          const size = 1 + (scale - 1) * p;
+          const vertical = p <= 0.5 ? p * 1.28 : 0.64 + (p - 0.5) * 0.72;
+          const centerX = from.left + x * p + (from.width * size) / 2;
+          const centerY = from.top + y * vertical + (from.height * size) / 2;
+          if (Math.hypot(centerX - originX, centerY - originY) <= radius * q) {
+            inkAt = time;
+            break;
+          }
+        }
+        flight.currentTime = reveal.currentTime = 0;
+        animations.push(
+          wordmark.animate([{ color: "#FAF5EC" }, { color: getComputedStyle(target).color }], {
+            duration: 120,
+            delay: Math.max(0, inkAt - 60),
+            fill: "forwards",
+            easing: "ease-in-out",
+          }),
+        );
+        flight.play();
+        reveal.play();
         for (const [selector, transform] of [
           [".pata-intro__logo", "translate(-48px,-80px)"],
           [".pata-intro__hindi", "translate(48px,-80px)"],
@@ -283,6 +314,7 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
             </div>
             <div className="pata-intro__actions">
               <button
+                ref={enterButtonRef}
                 className="pata-intro__enter"
                 type="button"
                 disabled={phase === "opening"}
