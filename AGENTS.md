@@ -54,6 +54,15 @@ Only change files your role owns (see `docs/team/README.md`). Files in `shared/`
 | `npm run e2e`        | Playwright, separately                                     |
 | `npm run build`      | static export to `out/`                                    |
 
+## Deploys: never
+
+Only the project owner deploys, by hand, from an up-to-date `main`. Never run any command that changes Cloudflare resources: `wrangler deploy`, `wrangler versions upload`, `wrangler secret ...`, `wrangler kv ...`, `npm run server:deploy`, or anything in the Cloudflare dashboard. A deploy from a branch would replace the live server with that branch's code.
+
+- Live app: https://pata.pata-ggr.workers.dev. It rebuilds by itself from `main`; don't change its build settings.
+- Live server: https://pata-server.pata-ggr.workers.dev (`NEXT_PUBLIC_SERVER_URL`).
+- To test the server, run it locally: `npm run server:dev`, which serves on localhost and touches nothing live.
+- Never run the owner scripts that send transactions or rewrite keys: `scripts/register-parent-names.mjs`, `lock-pata.mjs`, `fund-relay.mjs`, `rotate-keys.mjs`.
+
 ## Arkiv friction
 
 Anything confusing about Arkiv goes in `arkiv/friction.md` as one dated line, as it happens. It's 25% of Arkiv's judging.
