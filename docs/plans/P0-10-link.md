@@ -30,4 +30,7 @@
 - Key type representation: `payloadKey` is `0x`-prefixed hex string in memory (32 bytes = 64 hex chars + `0x`), whereas `sessionKey` is `Uint8Array` (32 bytes). Both must encode to unpadded base64url and parse back to their expected types.
 - Trailing slashes on origin URLs: ensure clean URL joining without double slashes.
 
-**Result:** (in progress)
+**Result:** Complete on `frontend`.
+- Implemented `toBase64Url`, `fromBase64Url`, `formatCourierLink`, and `parseCourierFragment` in `src/lib/link/index.ts` in pure TypeScript without browser globals.
+- All 9 unit tests in `src/lib/link/link.test.ts` pass, testing format, parse round-trip, `#` fragment prefix handling, unpadded base64url characters, hyphenated household names, non-"1" versions (rejected), extra `~` tokens (rejected), and 31-byte keys (rejected).
+- `npm run check` passes: app + server typecheck, 241 unit tests, and Foundry Osaka test.

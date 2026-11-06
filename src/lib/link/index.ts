@@ -20,18 +20,70 @@ for (let i = 0; i < B64URL_CHARS.length; i++) {
   B64URL_LOOKUP[B64URL_CHARS[i]] = i;
 }
 
+function hexToBytes(hex: `0x${string}`): Uint8Array {
+  const raw = hex.startsWith("0x") ? hex.slice(2) : hex;
+  if (raw.length !== 64 || /[^0-9a-fA-F]/.test(raw)) {
+    throw new Error("Invalid payloadKey: expected 32-byte 0x-hex string");
+  }
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(raw.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): `0x${string}` {
+  let hex = "0x";
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, "0");
+  }
+  return hex as `0x${string}`;
+}
+
 /** Returns the full URL. `origin` is the stable host (ADR 0001), e.g. https://pata.pages.dev */
 export function formatCourierLink(origin: string, link: CourierLink): string {
-  void origin;
-  void link;
-  void COURIER_LINK_VERSION;
-  throw new Error("formatCourierLink: not implemented (P0-10)");
+  const base = origin.replace(/\/+$/, "");
+  const payloadBytes = hexToBytes(link.payloadKey);
+  const payloadB64 = toBase64Url(payloadBytes);
+  const sessionB64 = toBase64Url(link.sessionKey);
+  return `${base}/c#${COURIER_LINK_VERSION}~${link.householdName}~${payloadB64}~${sessionB64}`;
 }
 
 /** Parses the `#` part (with or without the leading "#"). Returns null for anything malformed. */
 export function parseCourierFragment(fragment: string): CourierLink | null {
-  void fragment;
-  throw new Error("parseCourierFragment: not implemented (P0-11)");
+  try {
+    const raw = fragment.startsWith("#") ? fragment.slice(1) : fragment;
+    const parts = raw.split("~");
+    if (parts.length !== 4) {
+      return null;
+    }
+    const [version, householdName, payloadB64, sessionB64] = parts;
+    if (version !== COURIER_LINK_VERSION) {
+      return null;
+    }
+    if (!householdName || householdName.trim() === "") {
+      return null;
+    }
+
+    const payloadBytes = fromBase64Url(payloadB64);
+    if (payloadBytes.length !== 32) {
+      return null;
+    }
+
+    const sessionKey = fromBase64Url(sessionB64);
+    if (sessionKey.length !== 32) {
+      return null;
+    }
+
+    const payloadKey = bytesToHex(payloadBytes);
+    return {
+      householdName,
+      payloadKey,
+      sessionKey,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function toBase64Url(bytes: Uint8Array): string {
