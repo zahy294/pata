@@ -6,6 +6,7 @@ import { testEnv } from "../test-env";
 import type { RouteContext } from "../env";
 import { modelReply } from "../ai/test-helpers";
 import { recordingFixture } from "../../../src/lib/server-client/recording-fixtures";
+import { ErrorResponse } from "../../../shared/api";
 
 vi.mock("../guard", () => ({ chargeSpend: vi.fn() }));
 const charged = vi.mocked(chargeSpend);
@@ -105,5 +106,5 @@ it.each([
   vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockRejectedValue(new Error("PRIVATE_KEY_AND_BODY")));
   const response = await handler(await context(body));
   expect(response.status).toBe(502);
-  expect((await response.json()).error).toBe(message);
+  expect(ErrorResponse.parse(await response.json()).error).toBe(message);
 });
