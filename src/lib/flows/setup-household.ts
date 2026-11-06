@@ -65,6 +65,11 @@ export async function signIn(): Promise<HouseholdKeys> {
 /** Step 1: a default name (never derived from the address; names are public, ADR 0006). */
 export { suggestHouseholdLabel, isValidHouseholdLabel } from "../ens/names";
 
+/** True when the server couldn't place "area, PIN" on the map at all: retrying can't help, editing can. */
+export function isLocalityNotFound(failure: unknown): boolean {
+  return failure instanceof ServerError && failure.status === 422 && failure.code === "locality_not_found";
+}
+
 /** A plain sentence for a failed describeTheWay; never the raw error, which may carry request details. */
 export function describeTheWayError(failure: unknown): string {
   if (failure instanceof RecordingInputError)

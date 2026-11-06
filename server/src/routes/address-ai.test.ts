@@ -166,7 +166,7 @@ it("returns a plain limit error if token charging reaches the cap", async () => 
 });
 
 it("does not invent locality bounds when Nominatim finds no locality", async () => {
-  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(Response.json([])));
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async () => Response.json([])));
   expect((await addressRank(context(rankRequest))).status).toBe(422);
   expect(charged).not.toHaveBeenCalled();
 });
