@@ -60,7 +60,7 @@ export async function signIn(): Promise<HouseholdKeys> {
 }
 
 /** Step 1: a default name (never derived from the address; names are public, ADR 0006). */
-export { suggestHouseholdLabel } from "../ens/names";
+export { suggestHouseholdLabel, isValidHouseholdLabel } from "../ens/names";
 
 /** Step 1: whether a household label can be registered in pata.eth. Reserved counts as taken. */
 export async function checkHouseholdName(label: string): Promise<"available" | "taken" | "invalid"> {

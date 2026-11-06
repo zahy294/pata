@@ -31,7 +31,7 @@ import type {
 } from "../../../shared/domain";
 import type { HouseholdKeys } from "../../lib/keys";
 import type { SetupStep } from "../../lib/flows/setup-household";
-import * as flows from "../../lib/flows/fake";
+import * as flows from "../../lib/flows/setup-household";
 
 type FlowScreen = "signin" | "describe" | "pin" | "directions" | "name";
 
@@ -103,6 +103,8 @@ export default function SetupPage() {
   const [creating, setCreating] = useState(false);
   const [createStep, setCreateStep] = useState<SetupStep | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  // createHousehold resumes from a checkpoint and refuses changed details, so the name locks once it starts.
+  const [setupStarted, setSetupStarted] = useState(false);
 
   // Run Step 1 automatically on mount
   const handleSignIn = async () => {
@@ -272,7 +274,8 @@ export default function SetupPage() {
   };
 
   useEffect(() => {
-    if (screen !== "name") return;
+    // After registration this household owns the name, so "taken" would wrongly block a resume.
+    if (screen !== "name" || setupStarted) return;
     const normalized = labelInput.trim().toLowerCase();
     if (!flows.isValidHouseholdLabel(normalized)) {
       setAvailabilityStatus("invalid");
@@ -282,7 +285,7 @@ export default function SetupPage() {
       void checkAvailability(normalized);
     }, 250);
     return () => clearTimeout(timer);
-  }, [labelInput, screen]);
+  }, [labelInput, screen, setupStarted]);
 
   // Step 7: Create household
   const handleCreateHousehold = async () => {
@@ -296,6 +299,7 @@ export default function SetupPage() {
     }
 
     setCreating(true);
+    setSetupStarted(true);
     setCreateError(null);
     setCreateStep("topup-sepolia");
 
@@ -832,6 +836,7 @@ export default function SetupPage() {
               </span>
               <button
                 type="button"
+                disabled={setupStarted}
                 onClick={() => {
                   const fresh = flows.suggestHouseholdLabel();
                   setSuggestedLabel(fresh);
@@ -864,7 +869,7 @@ export default function SetupPage() {
                 id="household-label-input"
                 type="text"
                 value={labelInput}
-                disabled={creating}
+                disabled={creating || setupStarted}
                 onChange={(e) => setLabelInput(e.target.value.toLowerCase())}
                 placeholder="blue-gate"
                 className="min-w-0 flex-1 bg-transparent font-mono text-sm font-bold text-[#1F1C18] focus:outline-none"
@@ -997,8 +1002,8 @@ export default function SetupPage() {
             disabled={
               creating ||
               !isLabelValid ||
-              availabilityStatus === "taken" ||
-              availabilityStatus === "checking"
+              (!setupStarted &&
+                (availabilityStatus === "taken" || availabilityStatus === "checking"))
             }
             onClick={() => void handleCreateHousehold()}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#046A38] px-4 py-3.5 text-sm font-semibold text-[#FFFDF9] shadow-sm transition hover:bg-[#03562D] disabled:opacity-50"
