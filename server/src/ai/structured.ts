@@ -17,7 +17,9 @@ export async function structuredAddress<T>(
   const message =
     model === MODELS.extract ? "Address extraction unavailable" : "Landmark ranking unavailable";
   try {
-    const client = new Anthropic({ apiKey, maxRetries: 0, timeout: 90_000, logLevel: "off" });
+    // One SDK retry (429, 5xx, 529 overloaded, connection errors, with backoff): a ~2-minute Anthropic
+    // outage on 2026-11-06 failed setup outright. 45 s per attempt keeps the worst case at the old 90 s.
+    const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 45_000, logLevel: "off" });
     const format = zodOutputFormat(schema);
     const response = await client.messages.parse({
       model,
