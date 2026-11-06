@@ -6,6 +6,26 @@ import { testHouseholdKeys } from "./test-helpers";
 import { recordingFixture } from "./recording-fixtures";
 import { SIGNATURE_HEADERS } from "../../../shared/api";
 
+it("preserves the owner's safe spend-limit status and code for speech calls", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ code: "spend_limit", error: "Daily spend limit reached" }, { status: 429 }),
+      ),
+  );
+  await expect(
+    speechToText(await testHouseholdKeys(), new Blob([await recordingFixture()]), "hi"),
+  ).rejects.toMatchObject({
+    name: "ServerError",
+    status: 429,
+    code: "spend_limit",
+    message: "Daily spend limit reached",
+  });
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -23,15 +43,14 @@ it("signs exact raw recording bytes for the speech path and parses the transcrip
   const [url, init] = network.mock.calls[0];
   expect(String(url)).toBe("https://worker.test/speech/in?lang=hi");
   expect(init?.method).toBe("POST");
-  const body = init?.body;
-  if (!(body instanceof ArrayBuffer)) throw new Error("Expected raw recording bytes");
+  const body = await new Response(init?.body).arrayBuffer();
   expect(new Uint8Array(body)).toEqual(new Uint8Array(bytes));
   const headers = new Headers(init?.headers);
   expect(headers.get("content-type")).toBe("audio/webm");
   const signature = headers.get(SIGNATURE_HEADERS.signature);
   if (!signature || !signature.startsWith("0x")) throw new Error("Missing signature");
   const recovered = await recoverMessageAddress({
-    message: `pata:v1:/speech/in:${headers.get(SIGNATURE_HEADERS.timestamp)}:${createHash("sha256").update(new Uint8Array(body)).digest("hex")}`,
+    message: `pata:v1:/speech/in?lang=hi:${headers.get(SIGNATURE_HEADERS.timestamp)}:${createHash("sha256").update(new Uint8Array(body)).digest("hex")}`,
     signature: signature as `0x${string}`,
   });
   expect(recovered.toLowerCase()).toBe(keys.address.toLowerCase());
@@ -71,16 +90,29 @@ it("rejects an oversized Blob before upload", async () => {
 });
 
 it.each([
-  { kind: "HTTP failure", reply: () => Response.json({ error: "PRIVATE_AUDIO_DETAILS" }, { status: 502 }) },
-  { kind: "invalid transcript", reply: () => Response.json({ transcript: 42 }) },
-  { kind: "empty transcript", reply: () => Response.json({ transcript: "   " }) },
+  {
+    kind: "HTTP failure",
+    expected: "Server request failed",
+    reply: () => Response.json({ error: "PRIVATE_AUDIO_DETAILS" }, { status: 502 }),
+  },
+  {
+    kind: "invalid transcript",
+    expected: "Speech service unavailable",
+    reply: () => Response.json({ transcript: 42 }),
+  },
+  {
+    kind: "empty transcript",
+    expected: "Speech service unavailable",
+    reply: () => Response.json({ transcript: "   " }),
+  },
   {
     kind: "network failure",
+    expected: "Server request failed",
     reply: () => {
       throw new Error("PRIVATE_AUDIO_DETAILS");
     },
   },
-])("drops $kind details", async ({ reply }) => {
+])("drops $kind details", async ({ reply, expected }) => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   vi.stubGlobal(
     "fetch",
@@ -88,5 +120,5 @@ it.each([
   );
   await expect(
     speechToText(await testHouseholdKeys(), new Blob([await recordingFixture()]), "hi"),
-  ).rejects.toThrow(/^Speech service unavailable$/);
+  ).rejects.toThrow(expected);
 });

@@ -35,6 +35,7 @@ function context(body: unknown, route = "/address/extract"): RouteContext {
       PATA_KV: kv as unknown as Env["PATA_KV"],
     },
     household: "0x1111111111111111111111111111111111111111",
+    ip: "local-test",
     body: bodyBytes(JSON.stringify(body)),
     url: new URL(`https://worker.test${route}`),
     waitUntil() {},

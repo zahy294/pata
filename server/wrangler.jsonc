@@ -2,25 +2,34 @@
 // Secrets are set with `npx wrangler secret put <NAME>`, never written here.
 // Local secrets for `wrangler dev` go in server/.dev.vars (git ignores it).
 {
-  "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "pata-server",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-11-01",
-  "compatibility_flags": ["nodejs_compat"],
-  // Invariant: the address and speech routes never log request bodies. Workers Logs stay off.
-  "observability": { "enabled": false },
-  "vars": {
-    // Comma-separated origins allowed by CORS: the Pages host and localhost.
-    "ALLOWED_ORIGINS": "http://localhost:3000",
-    // "on" makes every route except /health answer 503 (CROPS "server off" demo, abuse).
-    "KILL_SWITCH": "off",
-    // Daily cap on model + speech spend, in US cents, counted in KV.
-    "DAILY_SPEND_CAP_CENTS": "300",
-    // pata.eth's own UserRegistry proxy, set after P0-2.
-    "PATA_REGISTRY_ADDRESS": "",
-    "SEPOLIA_RPC_URL": "https://ethereum-sepolia-rpc.publicnode.com",
-    "ARKIV_RPC_URL": "https://rpc.rabdi.db-chain.testnet.arkiv.network"
-  },
-  // Create once with `npx wrangler kv namespace create PATA_KV`, then paste the id here.
-  "kv_namespaces": [{ "binding": "PATA_KV", "id": "REPLACE_WITH_KV_ID" }]
+	"$schema": "../node_modules/wrangler/config-schema.json",
+	"name": "pata-server",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// Invariant: the address and speech routes never log request bodies. Workers Logs stay off.
+	"observability": {
+		"enabled": false
+	},
+	"vars": {
+		// Comma-separated origins allowed by CORS: the Pages host and localhost.
+		"ALLOWED_ORIGINS": "http://localhost:3000,https://pata.pata-ggr.workers.dev",
+		// "on" makes every route except /health answer 503 (CROPS "server off" demo, abuse).
+		"KILL_SWITCH": "off",
+		// Daily cap on model + speech spend, in US cents, counted in KV.
+		"DAILY_SPEND_CAP_CENTS": "300",
+		// pata.eth's own UserRegistry proxy, set after P0-2.
+		"PATA_REGISTRY_ADDRESS": "0x8961FBa6e336FfC00b564d873485Cc342DD00133",
+		"SEPOLIA_RPC_URL": "https://ethereum-sepolia-rpc.publicnode.com",
+		"ARKIV_RPC_URL": "https://rpc.rabdi.db-chain.testnet.arkiv.network"
+	},
+	// Create once with `npx wrangler kv namespace create PATA_KV`, then paste the id here.
+	"kv_namespaces": [
+		{
+			"binding": "PATA_KV",
+			"id": "bd2558e7f5534561bd1b41b18187f9e5"
+		}
+	]
 }

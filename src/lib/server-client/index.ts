@@ -22,20 +22,30 @@ import {
   RankRequest as RankRequestSchema,
   RankResponse as RankResponseSchema,
   ROUTES,
+  RegisterResponse as RegisterSchema,
+  TopupResponse as TopupSchema,
 } from "../../../shared/api";
 import { postAddress } from "./address-call";
 import { postRecording } from "./speech-call";
+import { signedPost } from "./signed";
+export { ServerError } from "./signed";
 
 export async function topup(keys: HouseholdKeys, req: TopupRequest): Promise<TopupResponse> {
-  void keys;
-  void req;
-  throw new Error("topup: not implemented (P0-6)");
+  const response = await signedPost(keys, ROUTES.topup, JSON.stringify(req));
+  try {
+    return TopupSchema.parse(await response.json());
+  } catch {
+    throw new Error("Invalid server response");
+  }
 }
 
 export async function registerName(keys: HouseholdKeys, req: RegisterRequest): Promise<RegisterResponse> {
-  void keys;
-  void req;
-  throw new Error("registerName: not implemented (P0-6)");
+  const response = await signedPost(keys, ROUTES.register, JSON.stringify(req));
+  try {
+    return RegisterSchema.parse(await response.json());
+  } catch {
+    throw new Error("Invalid server response");
+  }
 }
 
 export async function extractAddress(keys: HouseholdKeys, req: ExtractRequest): Promise<ExtractResponse> {

@@ -16,6 +16,7 @@ function context(body: ArrayBuffer, query = "?lang=hi"): RouteContext {
   return {
     env: { SARVAM_API_KEY: "test-sarvam-key" } as Env,
     household: "0x1111111111111111111111111111111111111111",
+    ip: "local-test",
     body,
     url: new URL(`https://worker.test/speech/in${query}`),
     waitUntil() {},

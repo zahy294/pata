@@ -5,6 +5,26 @@ import { extractAddress, rankLandmarks } from "./index";
 import { testHouseholdKeys } from "./test-helpers";
 import { SIGNATURE_HEADERS } from "../../../shared/api";
 
+it("preserves the owner's safe spend-limit status and code for address calls", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ code: "spend_limit", error: "Daily spend limit reached" }, { status: 429 }),
+      ),
+  );
+  await expect(
+    extractAddress(await testHouseholdKeys(), { wayToTheDoor: "near Temple", language: "en" }),
+  ).rejects.toMatchObject({
+    name: "ServerError",
+    status: 429,
+    code: "spend_limit",
+    message: "Daily spend limit reached",
+  });
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -66,15 +86,24 @@ it("sends ranking to its signed route and parses the framed dropped-pin response
 });
 
 it.each([
-  { kind: "HTTP failure", reply: () => Response.json({ error: "PRIVATE_PROVIDER_BODY" }, { status: 503 }) },
-  { kind: "invalid schema", reply: () => Response.json({ locality: "PRIVATE_PROVIDER_BODY" }) },
+  {
+    kind: "HTTP failure",
+    expected: "Server request failed",
+    reply: () => Response.json({ error: "PRIVATE_PROVIDER_BODY" }, { status: 503 }),
+  },
+  {
+    kind: "invalid schema",
+    expected: "Address service unavailable",
+    reply: () => Response.json({ locality: "PRIVATE_PROVIDER_BODY" }),
+  },
   {
     kind: "network failure",
+    expected: "Server request failed",
     reply: () => {
       throw new Error("PRIVATE_PROVIDER_BODY");
     },
   },
-])("returns a plain client error for $kind", async ({ reply }) => {
+])("returns a plain client error for $kind", async ({ reply, expected }) => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   vi.stubGlobal(
     "fetch",
@@ -82,7 +111,7 @@ it.each([
   );
   await expect(
     extractAddress(await testHouseholdKeys(), { wayToTheDoor: "near Temple", language: "en" }),
-  ).rejects.toThrow(/^Address service unavailable$/);
+  ).rejects.toThrow(expected);
 });
 
 it("validates input before signing or sending it", async () => {

@@ -10,8 +10,10 @@ Read before any task: this file, your role file in `docs/team/`, the ticket in `
 2. Use the **tdd** skill: red, green, refactor. One failing test, the least code to pass it, then tidy. Replace `it.todo` lines with real tests.
 3. Run `npm run check` (typecheck, Vitest, `forge test`). It must pass before every commit.
 4. Small commits named with the ticket id: `P0-4: encode Dak Bhawan`. Commit history is judged; never one giant commit.
-5. `git pull --rebase` then `git push` to `main`. Never force-push, never rewrite pushed history.
-6. When the ticket is done, fill in the plan's **Result** section and tick its "done when" in your role file's checklist.
+5. Work only on your role's branch (table in `docs/team/README.md`). "Push" always means `git push origin <your branch>`. Never push to `main`, never force-push, never rewrite pushed history.
+6. To pick up others' work: `git fetch` then `git merge origin/main` into your branch (merge, not rebase). Resolve conflicts only in files you own; for anything else, stop and ask.
+7. When a prompt is done and `npm run check` passes on your branch: open a pull request to `main` (`gh pr create --base main --fill`, or on GitHub). The project owner merges it with a merge commit, never a squash, because the small commits are judged. After it's merged, post "Unblocks: …" in the team chat.
+8. When the ticket is done, fill in the plan's **Result** section.
 
 ## Ownership
 
@@ -51,6 +53,15 @@ Only change files your role owns (see `docs/team/README.md`). Files in `shared/`
 | `npm run check`      | the gate: typecheck (app + server), Vitest, `forge test`   |
 | `npm run e2e`        | Playwright, separately                                     |
 | `npm run build`      | static export to `out/`                                    |
+
+## Deploys: never
+
+Only the project owner deploys, by hand, from an up-to-date `main`. Never run any command that changes Cloudflare resources: `wrangler deploy`, `wrangler versions upload`, `wrangler secret ...`, `wrangler kv ...`, `npm run server:deploy`, or anything in the Cloudflare dashboard. A deploy from a branch would replace the live server with that branch's code.
+
+- Live app: https://pata.pata-ggr.workers.dev. It rebuilds by itself from `main`; don't change its build settings.
+- Live server: https://pata-server.pata-ggr.workers.dev (`NEXT_PUBLIC_SERVER_URL`).
+- To test the server, run it locally: `npm run server:dev`, which serves on localhost and touches nothing live.
+- Never run the owner scripts that send transactions or rewrite keys: `scripts/register-parent-names.mjs`, `lock-pata.mjs`, `fund-relay.mjs`, `rotate-keys.mjs`.
 
 ## Arkiv friction
 

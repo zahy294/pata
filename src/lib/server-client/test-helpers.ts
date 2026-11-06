@@ -7,6 +7,9 @@ export async function testHouseholdKeys(): Promise<HouseholdKeys> {
   return {
     account,
     address: account.address,
-    sealKey: await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]),
+    sealKey: await crypto.subtle.importKey("raw", new ArrayBuffer(32), { name: "AES-GCM" }, false, [
+      "encrypt",
+      "decrypt",
+    ]),
   };
 }

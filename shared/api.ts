@@ -81,7 +81,8 @@ export const RegisterRequest = z.object({
   resolver: Address,
   grantRegistry: Address,
 });
-export const RegisterResponse = z.object({ txHash: Hex });
+/** Null when an earlier registration is confirmed by ownership but its hash was not saved. */
+export const RegisterResponse = z.object({ txHash: Hex.nullable() });
 
 /** POST /address/extract: Haiku pulls locality and landmark phrases out of the way to the door. */
 export const ExtractRequest = z.object({

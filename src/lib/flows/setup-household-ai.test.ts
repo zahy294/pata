@@ -101,7 +101,12 @@ it("stops before extraction if transcription fails", async () => {
   vi.stubGlobal("fetch", network);
   await expect(
     describeTheWay(await testHouseholdKeys(), new Blob([await recordingFixture()]), "hi"),
-  ).rejects.toThrow(/^Speech service unavailable$/);
+  ).rejects.toMatchObject({
+    name: "ServerError",
+    status: 502,
+    code: "server_error",
+    message: "Server request failed",
+  });
   expect(network).toHaveBeenCalledTimes(1);
 });
 
