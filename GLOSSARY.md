@@ -66,6 +66,14 @@ _Avoid_: share link, magic link, delivery link
 The household ending a grant before its expiry.
 _Avoid_: cancel, delete, withdraw
 
+**Hand-off**:
+The consent screen giving a courier link to the page a requester's name lists (`agent-endpoint[web]`), inside the `#` part, so no server receives it ([ADR 0013](docs/adr/0013-requester-hand-off-through-the-fragment.md)).
+_Avoid_: callback, webhook, post
+
+**Grant proof**:
+A grant holder's signature, made with the grant's owner key, over a verifier's challenge. Anyone checks it against the grant's owner in the registry; it shows consent without showing the address.
+_Avoid_: receipt, attestation, certificate
+
 **Live-access list**:
 The household's screen of grants that are live right now: "who can find my door".
 _Avoid_: dashboard, active shares
