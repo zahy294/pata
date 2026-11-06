@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 // Uses installed Chrome locally. CI can use the same channel or override launch options.
 export default defineConfig({
   testDir: ".",
-  testMatch: ["intro.spec.ts", "loader.spec.ts"],
+  testMatch: ["intro.spec.ts", "loader.spec.ts", "page-transitions.spec.ts"],
   fullyParallel: false,
   reporter: "list",
   use: { baseURL: "http://127.0.0.1:3000", channel: "chrome", trace: "retain-on-failure" },

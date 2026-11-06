@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import PageTransition from "../components/PageTransition";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
@@ -43,7 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </div>
           </header>
-          <div className="pata-app-content">{children}</div>
+          <div className="pata-app-content">
+            <PageTransition>{children}</PageTransition>
+          </div>
         </div>
       </body>
     </html>

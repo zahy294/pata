@@ -46,6 +46,16 @@ motion:
   completionFallbackMs: 950
   easing: cubic-bezier(0.76, 0, 0.24, 1)
   reduced: Instant entry; text is always still.
+page_reveal:
+  durationMs: 300
+  easing: cubic-bezier(0.16, 1, 0.3, 1)
+  content: Opacity 0.94 to 1; upward settle from 6px to 0
+  accent: 3px green-and-gold door jamb, 120px tall, beside the content gutter
+  header: Stationary
+  trigger: Pathname changes only, skip direct loads
+  lifecycle: Cancel on the next route, unmount or reduced-motion preference change
+  reduced: No reveal; navigation remains immediate
+  fallback: Fully visible content without browser animation support
 behavior:
   route: Home only
   persistence: sessionStorage, best effort
