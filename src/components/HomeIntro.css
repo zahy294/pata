@@ -1,0 +1,246 @@
+.pata-intro {
+  --intro-bg: #123b2b;
+  --intro-cream: #faf5ec;
+  --intro-muted: #c6d3c5;
+  --intro-gold: #e4c07a;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100svh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 0;
+  background: transparent;
+  color: var(--intro-cream);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  overscroll-behavior: contain;
+}
+.pata-intro::backdrop {
+  background: transparent;
+}
+.pata-intro__door {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 50.1%;
+  background: var(--intro-bg);
+  transition: transform 760ms cubic-bezier(0.76, 0, 0.24, 1) 80ms;
+  pointer-events: none;
+}
+.pata-intro__left {
+  left: 0;
+  transform-origin: left center;
+}
+.pata-intro__right {
+  right: 0;
+  transform-origin: right center;
+}
+.pata-intro[data-opening="true"] .pata-intro__left {
+  transform: translateX(-101%);
+}
+.pata-intro[data-opening="true"] .pata-intro__right {
+  transform: translateX(101%);
+}
+.pata-intro__composition {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  width: min(100%, 640px);
+  margin-inline: auto;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  opacity: 1;
+  transition:
+    opacity 160ms ease,
+    transform 240ms ease;
+}
+.pata-intro[data-opening="true"] .pata-intro__composition {
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+}
+.pata-intro__masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgb(228 192 122 / 23%);
+}
+.pata-intro__hindi {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 32px;
+  line-height: 1;
+}
+.pata-intro__mastheadNote {
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
+  color: var(--intro-muted);
+}
+.pata-intro__hero {
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(280px, 43svh, 400px);
+  margin-top: 24px;
+}
+.pata-intro__doorway {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: min(88%, 320px);
+  stroke: var(--intro-gold);
+  stroke-opacity: 0.28;
+  stroke-width: 0.8;
+}
+.pata-intro__wordmark {
+  position: relative;
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(120px, 35vw, 192px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.pata-intro__heroCaption {
+  position: relative;
+  margin-top: 12px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--intro-muted);
+}
+.pata-intro__message {
+  padding-block: 24px 32px;
+  text-align: center;
+}
+.pata-intro__message h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 7.5vw, 42px);
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+.pata-intro__message em {
+  color: var(--intro-gold);
+  font-weight: 400;
+}
+.pata-intro__message p {
+  margin-top: 16px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--intro-muted);
+}
+.pata-intro__actions {
+  padding-top: 8px;
+}
+.pata-intro__enter {
+  display: flex;
+  width: 100%;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 24px;
+  border: 1px solid var(--intro-cream);
+  border-radius: 999px;
+  background: var(--intro-cream);
+  color: var(--intro-bg);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pata-intro__enter:active {
+  transform: scale(0.98);
+}
+.pata-intro__enter:disabled {
+  cursor: wait;
+}
+.pata-intro__enter:focus-visible {
+  outline: 2px solid var(--intro-gold);
+  outline-offset: 6px;
+}
+.pata-intro__arrow {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  place-items: center;
+  background: var(--intro-bg);
+  color: var(--intro-cream);
+}
+.pata-intro__arrow svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pata-intro__footer {
+  margin: 16px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--intro-muted);
+}
+@media (hover: hover) {
+  .pata-intro__enter:hover {
+    background-color: #ffe4a8;
+  }
+}
+@media (min-width: 700px) {
+  .pata-intro__composition {
+    padding-inline: 48px;
+  }
+  .pata-intro__hero {
+    min-height: 400px;
+  }
+  .pata-intro__actions {
+    max-width: 400px;
+    width: 100%;
+    align-self: center;
+  }
+}
+@media (max-height: 740px) {
+  .pata-intro__composition {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .pata-intro__hero {
+    min-height: 240px;
+    margin-top: 16px;
+  }
+  .pata-intro__message {
+    padding-block: 16px;
+  }
+  .pata-intro__message h2 {
+    font-size: 30px;
+  }
+  .pata-intro__message p {
+    margin-top: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pata-intro__door,
+  .pata-intro__composition,
+  .pata-intro__enter {
+    transition: none;
+  }
+}

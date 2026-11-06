@@ -1,0 +1,51 @@
+# Scoped Hue model for the approved intro, not a replacement for the app's design system.
+name: Pata doorway
+reference: https://www.instagram.com/p/De1gtsHD0zB/
+observed: Warm cream, oversized editorial lettering, fine rules; caption discusses transitions.
+limitation: Exact video motion unavailable; user approved a Pata-specific doorway interpretation.
+steering: App icon uses the bottom-right green tile reference. Intro uses only normal cream Pata lettering, no chrome finish.
+voice: Warm, direct, household-led.
+colors:
+  canvas: "#123B2B"
+  cream: "#FAF5EC"
+  muted: "#C6D3C5"
+  gold: "#E4C07A"
+  brandGreen: "#046A38"
+type:
+  display: Georgia, Times New Roman, serif
+  body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif
+  displaySize: clamp(120px, 35vw, 192px)
+  headingSize: clamp(30px, 7.5vw, 42px)
+  bodySize: 15px
+  labelSize: 12px
+spacing: [4, 8, 12, 16, 24, 32, 40, 48, 64, 96]
+hero_stage:
+  preset: flat-blank
+  subject: composition
+  form: Oversized cream Pata lettering inside a fine doorway outline.
+  relation: flat
+  medium: absent
+  motion: Entry interaction only; no pointer requirement on phones.
+motion:
+  doorDurationMs: 760
+  doorDelayMs: 80
+  completionFallbackMs: 950
+  easing: cubic-bezier(0.76, 0, 0.24, 1)
+  reduced: Instant entry; text is always still.
+behavior:
+  route: Home only
+  persistence: sessionStorage, best effort
+  entry: Tap or keyboard; Escape enters immediately
+  failure: Storage errors never block entry; animation has a completion fallback
+loader:
+  shapes: [soft-burst, cookie-9-sided, pentagon, pill, sunny, cookie-4-sided, oval, location, flower]
+  icon: /icons/loading-location.png
+  controlSizePx: 20
+  panelSizePx: 24
+  mapSizePx: 28
+  cycleStepMs: 850
+  morphDurationMs: 440
+  crossfadeMs: 160
+  color: Inherit control foreground; brand green or gold on light panels
+  reduced: Still location icon
+  background: Pause when document is hidden

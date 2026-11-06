@@ -3,12 +3,14 @@
 // Signed out: "Set up your home" (→ /setup). Signed in: the household name, its locality, and
 // links to the live-access list and history. No crypto words anywhere in the UI (idea.md, Usability).
 import { useEffect, useState } from "react";
+import MorphLoader from "../components/MorphLoader";
 import Link from "next/link";
+import HomeIntro from "../components/HomeIntro";
 import { loadHouseholdState, type HouseholdState } from "../lib/keys/store";
 import { lookupHousehold } from "../lib/flows/lookup";
 import type { Locality } from "../../shared/domain";
 
-export default function Home() {
+function HomeContent() {
   const [loading, setLoading] = useState(true);
   const [household, setHousehold] = useState<HouseholdState | null>(null);
   const [locality, setLocality] = useState<Locality | null>(null);
@@ -56,14 +58,13 @@ export default function Home() {
           Your door, shared only by consent.
         </h1>
         <p className="text-sm text-[#6E655A]">
-          Share expiring doorstep directions with couriers while everyone else
-          sees only your neighbourhood.
+          Share expiring doorstep directions with couriers while everyone else sees only your neighbourhood.
         </p>
       </div>
 
       {loading && (
         <section className="flex items-center gap-3 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 text-sm text-[#1F1C18] shadow-xs">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+          <MorphLoader size={24} color="#046A38" />
           <span>Checking your home on this phone…</span>
         </section>
       )}
@@ -72,12 +73,10 @@ export default function Home() {
       {!loading && !household && (
         <section className="flex flex-col gap-4 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 shadow-sm">
           <div>
-            <h2 className="font-serif text-lg font-bold text-[#1F1C18]">
-              No home set up on this phone yet
-            </h2>
+            <h2 className="font-serif text-lg font-bold text-[#1F1C18]">No home set up on this phone yet</h2>
             <p className="mt-1 text-xs leading-relaxed text-[#6E655A]">
-              Record or type how people find your door, confirm your 4m × 4m
-              DIGIPIN grid code, and pick a memorable name for your home.
+              Record or type how people find your door, confirm your 4m × 4m DIGIPIN grid code, and pick a
+              memorable name for your home.
             </p>
           </div>
 
@@ -114,9 +113,7 @@ export default function Home() {
               </span>
             </div>
 
-            <p className="mt-1.5 font-mono text-xl font-bold text-[#1F1C18]">
-              {household.name}
-            </p>
+            <p className="mt-1.5 font-mono text-xl font-bold text-[#1F1C18]">{household.name}</p>
 
             <div className="mt-3 flex items-center justify-between rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-3.5 py-2.5">
               <div>
@@ -155,21 +152,23 @@ export default function Home() {
           </div>
 
           <div className="flex items-center justify-between rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] px-4 py-3 text-xs">
-            <Link
-              href="/approve/"
-              className="font-semibold text-[#046A38] underline"
-            >
+            <Link href="/approve/" className="font-semibold text-[#046A38] underline">
               Share a courier link
             </Link>
-            <Link
-              href="/lookup/"
-              className="font-semibold text-[#6E655A] underline hover:text-[#1F1C18]"
-            >
+            <Link href="/lookup/" className="font-semibold text-[#6E655A] underline hover:text-[#1F1C18]">
               Look up a name
             </Link>
           </div>
         </div>
       )}
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <HomeIntro>
+      <HomeContent />
+    </HomeIntro>
   );
 }
