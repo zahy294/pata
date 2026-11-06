@@ -13,7 +13,11 @@ import type {
 import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
 import type { HouseholdState } from "../keys/store";
-import { extractAddress, rankLandmarks, speechToText } from "../server-client";
+import { extractAddress, rankLandmarks, speechToText, writeDirections, textToSpeech } from "../server-client";
+import { LANGUAGES } from "../../../shared/domain";
+import { distanceMetres } from "../../../shared/geo";
+import { ARKIV_MAX_BYTES } from "../../../shared/constants";
+import { shortenDirections } from "../server-client/directions-text";
 
 /** P0: load the device root or make a new one; P1-3: passkey. */
 export async function signIn(): Promise<HouseholdKeys> {
@@ -41,18 +45,42 @@ export async function findCandidatePins(
   return rankLandmarks(keys, { wayToTheDoor, locality, landmarkPhrases });
 }
 
-/** Step 5: directions in hi/mr/en from the confirmed pin, then one clip each, sealed to Arkiv. */
+/** Step 5: raw clips for createHousehold to encrypt/persist after funding; no Arkiv writes here. */
 export async function makeDirections(
   keys: HouseholdKeys,
   wayToTheDoor: string,
   confirmedPin: LatLon,
   landmarks: { feature: OsmFeature; relation: Relation }[],
-): Promise<{ directions: DirectionsText; voiceKeys: Record<Language, `0x${string}`> }> {
-  void keys;
-  void wayToTheDoor;
-  void confirmedPin;
-  void landmarks;
-  throw new Error("makeDirections: not implemented (P0-9)");
+): Promise<{ directions: DirectionsText; clips: Partial<Record<Language, Uint8Array>> }> {
+  const { directions } = await writeDirections(keys, {
+    wayToTheDoor,
+    pin: confirmedPin,
+    landmarks: landmarks.map(({ feature, relation }) => ({
+      feature,
+      relation,
+      metres: distanceMetres(confirmedPin, feature.point),
+    })),
+  });
+  const clips: Partial<Record<Language, Uint8Array>> = {};
+  for (const language of LANGUAGES) {
+    try {
+      let text = directions[language];
+      let clip = await textToSpeech(keys, text, language);
+      // sealBytes v1: one version byte, 12-byte IV and 16-byte AES-GCM tag.
+      // createHousehold owns encryption and persistence after funding.
+      if (clip.byteLength + 29 >= ARKIV_MAX_BYTES) {
+        text = shortenDirections(text, Math.max(1, Math.floor(Array.from(text).length / 2)));
+        clip = await textToSpeech(keys, text, language);
+      }
+      if (clip.byteLength + 29 < ARKIV_MAX_BYTES) {
+        directions[language] = text;
+        clips[language] = clip;
+      }
+    } catch {
+      // ADR 0007: retain directions for browser speech fallback.
+    }
+  }
+  return { directions, clips };
 }
 
 export interface NewHousehold {
