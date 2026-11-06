@@ -73,7 +73,9 @@ async function reserveDailyTopup(env: Env, chain: "sepolia" | "arkiv", ip: strin
   });
 }
 
-export const TOPUP_TARGETS = { sepolia: parseEther("0.0005"), arkiv: parseEther("0.02") } as const;
+// Measured 2026-11-06: a full 128 KiB Arkiv create is ~12.9M gas (~0.013 tGLM at ~1 gwei). Setup writes three
+// clips and a home record (~0.041 tGLM) and each grant writes one clip plus a batch (~0.014 tGLM).
+export const TOPUP_TARGETS = { sepolia: parseEther("0.0005"), arkiv: parseEther("0.1") } as const;
 
 async function clearRegistration(env: Env, key: string): Promise<void> {
   await reserve(env, `${key}:hash`, null);
