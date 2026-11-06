@@ -1,7 +1,7 @@
 // Public reads anyone can do. Owner: blockchain (P0-13 stranger lookup, P1-1 grid names).
 // All reads go through ../rpc (Anon-RPC). viem's getEnsText through the Universal Resolver.
 import type { LatLon, Locality } from "../../../shared/domain";
-import { ENS } from "../../../shared/constants";
+import { ENS, RECORD_KEYS } from "../../../shared/constants";
 import { sepoliaPublicClient } from "../rpc";
 import { universalHelperAbi } from "./abis";
 import { dnsEncode } from "./names";
@@ -44,4 +44,21 @@ export async function householdOwner(householdName: string): Promise<`0x${string
 export async function resolveGridName(gridName: string): Promise<LatLon | null> {
   void gridName;
   throw new Error("resolveGridName: not implemented (P1-1)");
+}
+
+/** A requester's ENSIP-26 records (P1-5): who it says it is, and where it takes courier links. */
+export async function readRequesterRecords(
+  ensName: string,
+): Promise<{ about: string | null; endpoint: string | null }> {
+  try {
+    const client = sepoliaPublicClient();
+    const [about, endpoint] = await Promise.all(
+      [RECORD_KEYS.agentContext, RECORD_KEYS.agentEndpointWeb].map((key) =>
+        client.getEnsText({ name: ensName, key, universalResolverAddress: ENS.universalResolver }),
+      ),
+    );
+    return { about: about || null, endpoint: endpoint || null };
+  } catch {
+    throw new Error("Could not read requester records");
+  }
 }

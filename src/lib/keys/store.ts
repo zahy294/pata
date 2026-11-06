@@ -168,3 +168,37 @@ export async function loadSetupCheckpoint(address: `0x${string}`): Promise<Setup
     )) ?? null
   );
 }
+
+/**
+ * The demo seller (P1-5) on this device: its own random root, so its key is never the household's, and
+ * its public name and records. `ready` is false while setup is unfinished; the name is then locked, because
+ * the relay registers one name per owner key.
+ */
+export interface SellerState {
+  name: string;
+  displayName: string;
+  about: string;
+  endpoint: string;
+  ready: boolean;
+}
+
+export async function loadSellerRoot(): Promise<Uint8Array | null> {
+  if (typeof indexedDB === "undefined") return null;
+  return (await transaction<Uint8Array | undefined>("readonly", (store) => store.get("seller-root"))) ?? null;
+}
+
+export async function saveSellerRoot(root: Uint8Array): Promise<void> {
+  if (typeof indexedDB === "undefined") throw new Error("Device storage is unavailable");
+  if (root.length !== 32) throw new Error("Seller root must be 32 bytes");
+  await transaction("readwrite", (store) => store.put(root, "seller-root"));
+}
+
+export async function loadSellerState(): Promise<SellerState | null> {
+  if (typeof indexedDB === "undefined") return null;
+  return (await transaction<SellerState | undefined>("readonly", (store) => store.get("seller-state"))) ?? null;
+}
+
+export async function saveSellerState(state: SellerState): Promise<void> {
+  if (typeof indexedDB === "undefined") throw new Error("Device storage is unavailable");
+  await transaction("readwrite", (store) => store.put(state, "seller-state"));
+}

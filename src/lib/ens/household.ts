@@ -63,6 +63,52 @@ export interface HouseholdContracts {
   grantRegistry: `0x${string}`;
 }
 
+/**
+ * A requester's public ENSIP-26 records (P1-5): `agent-context` says who it is and what it does with an
+ * address; `agent-endpoint[web]` is where a household's consent screen hands the courier link (ADR 0013).
+ */
+export interface RequesterProfile {
+  about: string;
+  endpoint: string;
+}
+
+/** The endpoint must be a page a household can be sent to: https, or plain http on this computer only. */
+export function isSafeRequesterEndpoint(endpoint: string): boolean {
+  if (endpoint.length > 300) return false;
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  return (
+    (url.protocol === "https:" || (url.protocol === "http:" && local)) &&
+    !url.username &&
+    !url.password &&
+    !url.hash &&
+    !endpoint.includes("#")
+  );
+}
+
+function requesterCalls(fullName: string, profile: RequesterProfile): Hex[] {
+  const about = profile.about.trim();
+  if (!about || about.length > 600 || !isSafeRequesterEndpoint(profile.endpoint))
+    throw new Error("Invalid requester records");
+  return [
+    encodeFunctionData({
+      abi: permissionedResolverAbi,
+      functionName: "setText",
+      args: [dnsEncode(fullName), RECORD_KEYS.agentContext, about],
+    }),
+    encodeFunctionData({
+      abi: permissionedResolverAbi,
+      functionName: "setText",
+      args: [dnsEncode(fullName), RECORD_KEYS.agentEndpointWeb, profile.endpoint],
+    }),
+  ];
+}
+
 /** 0 available, 1 reserved, 2 registered, read from pata.eth's registry. */
 export async function householdLabelStatus(label: string): Promise<0 | 1 | 2> {
   if (!isValidHouseholdLabel(label)) throw new Error("Invalid household label");
@@ -86,7 +132,25 @@ export async function deployHouseholdContracts(
   locality: Locality,
 ): Promise<HouseholdContracts> {
   fullName = householdName(fullName);
-  const calls = localityCalls(fullName, locality);
+  return deployNameContracts(keys, fullName, localityCalls(fullName, locality));
+}
+
+/** A requester's name gets the same two contracts, with its agent records written at deploy (P1-5). */
+export async function deployRequesterContracts(
+  keys: HouseholdKeys,
+  fullName: string,
+  profile: RequesterProfile,
+): Promise<HouseholdContracts> {
+  fullName = householdName(fullName);
+  // Both checks throw before any RPC, so unsafe records never reach a transaction.
+  return deployNameContracts(keys, fullName, requesterCalls(fullName, profile));
+}
+
+async function deployNameContracts(
+  keys: HouseholdKeys,
+  fullName: string,
+  calls: Hex[],
+): Promise<HouseholdContracts> {
   const client = sepoliaPublicClient();
   const wallet = sepoliaWalletClient(keys.account);
   // Writes go to a load-balanced RPC that can lag the read path, so its nonce fill can reuse a nonce the
@@ -181,6 +245,34 @@ export async function deployHouseholdContracts(
     }),
   );
   return { resolver, grantRegistry };
+}
+
+/**
+ * Rewrites a requester's agent records. The resolver's address depends only on the owner key, so after a
+ * renamed setup it already exists holding records for the earlier name.
+ */
+export async function setRequesterRecords(
+  keys: HouseholdKeys,
+  contracts: HouseholdContracts,
+  fullName: string,
+  profile: RequesterProfile,
+): Promise<void> {
+  fullName = householdName(fullName);
+  const calls = requesterCalls(fullName, profile);
+  try {
+    const hash = await sepoliaWalletClient(keys.account).writeContract({
+      chain: sepolia,
+      account: keys.account,
+      address: contracts.resolver,
+      abi: permissionedResolverAbi,
+      functionName: "multicall",
+      args: [calls],
+    });
+    const receipt = await sepoliaPublicClient().waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error("Requester records update failed");
+  } catch {
+    throw new Error("Could not update requester records");
+  }
 }
 
 /** Writes the public locality records (`location`, `eth.pata.pincode`) on the household's resolver. */

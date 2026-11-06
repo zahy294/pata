@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { decodeFunctionData, encodeEventTopics, encodeAbiParameters, labelhash } from "viem";
 import { deriveHouseholdKeys } from "../keys";
-import { householdLabelStatus, deployHouseholdContracts, setLocality } from "./household";
+import {
+  householdLabelStatus,
+  deployHouseholdContracts,
+  deployRequesterContracts,
+  setLocality,
+  setRequesterRecords,
+} from "./household";
+import { dnsEncode } from "./names";
 import { permissionedResolverAbi, userRegistryAbi, verifiableFactoryAbi } from "./abis";
 import { GRANT_REGISTRY_ROOT_ROLES, RESOLVER_ROOT_ROLES } from "./roles";
 import { ENS } from "../../../shared/constants";
@@ -251,5 +258,88 @@ describe("household ENS setup", () => {
         args: [BigInt(labelhash("blue-gate"))],
       }),
     );
+  });
+});
+
+describe("requester names (P1-5, ENSIP-26)", () => {
+  const profile = {
+    about: "Chai Kart, a demo seller. Asks for your door to deliver an order; never stores it.",
+    endpoint: "https://pata.example/seller/",
+  };
+  function deployedReceipts(keys: { address: `0x${string}` }) {
+    rpc.waitForTransactionReceipt.mockImplementation(async ({ hash }) => {
+      const i = hash === "0x01" ? 0 : 1;
+      const [implementation, salt] = rpc.writeContract.mock.calls[i][0].args;
+      return {
+        status: "success",
+        logs: [
+          {
+            address: ENS.verifiableFactory,
+            topics: encodeEventTopics({
+              abi: verifiableFactoryAbi,
+              eventName: "ProxyDeployed",
+              args: { sender: keys.address, proxyAddress: i === 0 ? resolver : grantRegistry },
+            }),
+            data: encodeAbiParameters([{ type: "uint256" }, { type: "address" }], [salt, implementation]),
+          },
+        ],
+      };
+    });
+  }
+  it("deploys a requester's resolver with its agent records and no locality", async () => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    rpc.writeContract.mockResolvedValueOnce("0x01").mockResolvedValueOnce("0x02");
+    deployedReceipts(keys);
+    expect(await deployRequesterContracts(keys, "chai-kart.pata.eth", profile)).toEqual({
+      resolver,
+      grantRegistry,
+    });
+    const initializer = decodeFunctionData({
+      abi: permissionedResolverAbi,
+      data: rpc.writeContract.mock.calls[0][0].args[2],
+    });
+    if (initializer.functionName !== "initialize") throw new Error("Wrong initializer");
+    expect(
+      initializer.args[1].map((data) => decodeFunctionData({ abi: permissionedResolverAbi, data }).args),
+    ).toEqual([
+      [dnsEncode("chai-kart.pata.eth"), "agent-context", profile.about],
+      [dnsEncode("chai-kart.pata.eth"), "agent-endpoint[web]", profile.endpoint],
+    ]);
+  });
+  it("refuses records a household couldn't safely be shown or sent to, before any RPC", async () => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    for (const bad of [
+      { ...profile, about: "  " },
+      { ...profile, about: "x".repeat(601) },
+      { ...profile, endpoint: "http://pata.example/seller/" },
+      { ...profile, endpoint: "javascript:alert(1)" },
+      { ...profile, endpoint: "https://user:pass@pata.example/" },
+      { ...profile, endpoint: "https://pata.example/seller/#old" },
+    ]) {
+      await expect(deployRequesterContracts(keys, "chai-kart.pata.eth", bad)).rejects.toThrow(
+        "Invalid requester records",
+      );
+    }
+    expect(rpc.readContract).not.toHaveBeenCalled();
+    expect(rpc.writeContract).not.toHaveBeenCalled();
+  });
+  it("allows a plain-http endpoint only on this computer, for local testing", async () => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    rpc.getCode.mockResolvedValue("0x6000");
+    await expect(
+      deployRequesterContracts(keys, "chai-kart.pata.eth", { ...profile, endpoint: "http://localhost:3000/seller/" }),
+    ).resolves.toEqual({ resolver, grantRegistry });
+  });
+  it("rewrites both agent records when the resolver already existed for another name", async () => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    rpc.writeContract.mockResolvedValue("0x03");
+    rpc.waitForTransactionReceipt.mockResolvedValue({ status: "success", logs: [] });
+    await setRequesterRecords(keys, { resolver, grantRegistry }, "chai-kart.pata.eth", profile);
+    const call = rpc.writeContract.mock.calls[0][0];
+    expect([call.address, call.functionName]).toEqual([resolver, "multicall"]);
+    expect(
+      call.args[0].map((data: `0x${string}`) => decodeFunctionData({ abi: permissionedResolverAbi, data }).args[1]),
+    ).toEqual(["agent-context", "agent-endpoint[web]"]);
+    expect(rpc.waitForTransactionReceipt).toHaveBeenCalledWith({ hash: "0x03" });
   });
 });

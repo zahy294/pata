@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { householdOwner, lookupLocality } from "./lookup";
+import { householdOwner, lookupLocality, readRequesterRecords } from "./lookup";
 import { grantStatusByName } from "./grants";
 const io = vi.hoisted(() => ({ readContract: vi.fn(), getEnsText: vi.fn() }));
 vi.mock("../rpc", () => ({ sepoliaPublicClient: () => io }));
@@ -41,4 +41,22 @@ it("finds exact household ownership using the full DNS name", async () => {
       args: ["0x04686f6d6504706174610365746800"],
     }),
   );
+});
+
+it("reads a requester's two ENSIP-26 records through the universal resolver", async () => {
+  io.getEnsText.mockImplementation(async ({ key }) =>
+    key === "agent-context" ? "Chai Kart, a demo seller." : "https://pata.example/seller/",
+  );
+  expect(await readRequesterRecords("chai-kart.pata.eth")).toEqual({
+    about: "Chai Kart, a demo seller.",
+    endpoint: "https://pata.example/seller/",
+  });
+  expect(io.getEnsText.mock.calls.map(([arg]) => [arg.name, arg.key])).toEqual([
+    ["chai-kart.pata.eth", "agent-context"],
+    ["chai-kart.pata.eth", "agent-endpoint[web]"],
+  ]);
+  io.getEnsText.mockResolvedValue(null);
+  expect(await readRequesterRecords("nobody.pata.eth")).toEqual({ about: null, endpoint: null });
+  io.getEnsText.mockRejectedValue(new Error("secret request"));
+  await expect(readRequesterRecords("chai-kart.pata.eth")).rejects.toThrow(/^Could not read requester records$/);
 });

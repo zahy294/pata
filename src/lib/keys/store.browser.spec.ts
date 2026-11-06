@@ -179,3 +179,24 @@ test("lists only this household's unfinished stops, so a reload can finish them"
   });
   expect(result).toEqual([{ payloadKey: "0x" + "12".repeat(32), bytes: [1, 2] }]);
 });
+
+test("the demo seller keeps its own root and state beside the household's", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const moduleUrl = "/store.js";
+    const store = await import(moduleUrl);
+    await store.saveDeviceRoot(new Uint8Array(32).fill(1));
+    await store.saveSellerRoot(new Uint8Array(32).fill(2));
+    const state = { name: "chai-kart.pata.eth", displayName: "Chai Kart", about: "A shop", endpoint: "https://x/", ready: false };
+    await store.saveSellerState(state);
+    return {
+      device: Array.from(await store.loadDeviceRoot()),
+      seller: Array.from(await store.loadSellerRoot()),
+      state: await store.loadSellerState(),
+    };
+  });
+  expect(result).toEqual({
+    device: Array(32).fill(1),
+    seller: Array(32).fill(2),
+    state: { name: "chai-kart.pata.eth", displayName: "Chai Kart", about: "A shop", endpoint: "https://x/", ready: false },
+  });
+});
