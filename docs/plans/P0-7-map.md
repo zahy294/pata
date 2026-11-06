@@ -27,4 +27,9 @@
 - PMTiles extract: if `pmtiles` CLI binary is unavailable locally, use OpenFreeMap's liberty style (`https://tiles.openfreemap.org/styles/liberty`) as authorized by `maps.md` and Prompt 2.
 - WebGL2 missing: catch `GPUInitializationError` gracefully if environment lacks WebGL2 support.
 
-**Result:** (in progress)
+**Result:** Complete on `frontend`.
+- Built phone-first container in `src/app/layout.tsx` with header branding and zero third-party fonts/trackers.
+- Built `src/components/MapView.tsx` as a dynamic SSR-safe wrapper (`ssr: false`) and `src/components/MapViewInner.tsx` using `maplibre-gl` 6.16, `pmtiles` 4.5, `setWorkerUrl` pointing to worker asset, bounds clamped to `DEMO_BBOX`, OpenFreeMap fallback style, attribution, and draggable markers with `onPinMoved`.
+- Wired interactive map test into `src/app/setup/page.tsx` with a draggable pin logging `LatLon`.
+- `npm run check` passes (typecheck app + server, 241 unit tests, and Foundry Osaka test).
+- `npm run build` succeeds cleanly with Next.js Turbopack static export to `out/` across all 11 static routes.
