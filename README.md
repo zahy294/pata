@@ -1,134 +1,147 @@
 # Pata
 
-Pata is building household-owned address names on ENSv2.<br>
-Couriers and apps receive expiring, revocable grants to the exact door.<br>
-Everyone else sees only the locality: the neighbourhood and PIN code.
+Pata (पता, "address") gives Indian households an address name they own, like `white-gate.pata.eth`, on ENSv2.<br>
+Strangers who look the name up see only the locality, for example "Dharavi, 400017".<br>
+Couriers and apps get an expiring, revocable link to the exact door: pin, DIGIPIN, room number, written address and spoken directions in Hindi, Marathi or English.
 
-## Live app and hosting
+Built at ETHGlobal Mumbai (Classic track, Nov 5–7, 2026).
 
-- [App](https://pata.pata-ggr.workers.dev)
-- [Server](https://pata-server.pata-ggr.workers.dev)
+## Try it
 
-The app uses a stable Cloudflare host with Workers static assets; the API is a separate Worker. [ADR 0001](docs/adr/0001-stable-host-plus-ipfs-pin.md) named Pages, but the reason is unchanged: passkeys bind to one hostname. The IPFS pin is **planned**; no CID is published here yet.
+- **App:** https://pata.pata-ggr.workers.dev (built for phones; use mobile data, see [Known limitations](#known-limitations))
+- **Server:** https://pata-server.pata-ggr.workers.dev (`/health`)
 
-**Draft, 2026-11-06:** deployed endpoints do not establish a completed household-to-courier demo. This checkout has placeholder screens and unfinished flows. Home/voice storage and ADR 0008 exist on the unmerged blockchain branch; the [P0-14 plan](docs/plans/P0-14.md) records the snapshot reviewed.
+1. **Set up a home:** `/setup`. Describe the way to your door by voice or text, including the area and 6-digit PIN code. Type the room number separately; it never leaves the phone unencrypted. Pick a landmark pin or tap your door on the map, check the directions in three languages, choose a name, then save (about 2 minutes).
+2. **Share the door:** home → **Share a courier link**. Make a test request with a requester, purpose, language and duration (20 seconds for the stage demo), then approve. Share the link or QR code.
+3. **Open it as the courier:** on another phone, open the link. You'll see the locality at once, then the door. When the grant ends, the page switches to "This link has ended" and shows only the locality.
+4. **Look up a name:** `/lookup`. Any household name shows only its locality.
 
 ## How it works
 
-The design maps [DHRUVA's roles](idea.md#the-six-jury-questions) onto ENSv2; this is not an official DHRUVA integration.
+```text
+household phone ──signed──▶ Worker (Claude, Sarvam, map search, gas relay, /register)
+      │                                       │
+      ├─ ENSv2 Sepolia: name, resolver (public locality), grant registry
+      └─ Arkiv Rabdi: sealed home, voice, grant payload, grant audio, history
+courier phone ──Anon-RPC (Nox mixnet)──▶ ENS liveness check ──▶ Arkiv payload, decrypted with the link's key
+```
 
-| DHRUVA role or concept | Pata mapping |
-| --- | --- |
-| Central Mapper | The ENS hierarchy connects provider registries. Other providers could run their own; a second live provider is planned. |
-| Address Information Provider | Pata operates `pata.eth`'s ENSv2 UserRegistry; its registrar relay issues household names. |
-| Digital Address and household | A household owns a subname, Permissioned Resolver and separate grant registry. Public records contain locality only; exact records are encrypted on Arkiv. Setup integration is planned here. |
-| Consent token | An opaque, expiring subname owned by a one-time address derived from the grant's session key, with no transfer or record-setting roles. Issuance/revocation integration is planned. |
-| Address Information User / requester | A seller, courier or emergency service receives a bearer courier link. ENSIP-26 requester identity and seller proof are planned. |
-| Public address grid | DIGIPIN encoding is implemented; wildcard `*.digipin.eth` resolution is planned, with no deployed grid resolver claimed. |
-
-Planned flow: confirm a proposed pin, create the name and encrypted home record, then approve a purpose and duration. The courier link carries the payload reference and session key after `#`, which browsers do not send to the host. The courier must check ENS ownership/liveness before opening the Arkiv payload; a missing payload also ends access. Family aliasing, passkey-derived keys and updating live grants after a move are planned.
+| Piece                 | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Household name**    | `<label>.pata.eth` in Pata's ENSv2 UserRegistry. The household owns its own Permissioned Resolver (public `location` and PIN code records) and its own grant registry. `pata.eth`'s registry is emancipated and its subregistry pointer is locked ([ADR 0003](docs/adr/0003-grant-registry-stays-unemancipated.md)), so Pata can't take names back.                                                                                                 |
+| **Grant**             | An 8-character random label under the household name, e.g. `rjmrtr4h.test1.pata.eth`, owned by an address derived from a fresh session key. It expires on chain, and the household can unregister it early ([ADR 0002](docs/adr/0002-grant-liveness-from-the-registry.md), [ADR 0004](docs/adr/0004-grant-identity-from-the-session-key.md)).                                                                                                       |
+| **Courier link**      | `https://…/c#1~<household>~<payload key>~<session key>`. Everything after `#` stays in the browser and is never sent to any server; the page removes it from the address bar at once ([ADR 0006](docs/adr/0006-courier-link-format.md)).                                                                                                                                                                                                            |
+| **Encrypted records** | Arkiv entities whose only contents are AES-GCM ciphertext. The home and voice records are sealed to the household key. Each grant gets a payload and an audio clip sealed to that grant's session key, plus a household-sealed index and history ([ADR 0008](docs/adr/0008-grant-entity-has-a-household-index.md), [ADR 0009](docs/adr/0009-grant-audio-is-its-own-entity.md)). Entities expire on their own; grant payloads expire with the grant. |
+| **Address AI**        | Claude **Haiku 5.5** extracts the area, PIN code and landmark phrases from the way to the door. **Sonnet 5.5** picks landmarks only from real OpenStreetMap features (Nominatim and Overpass) and writes directions in three languages. Plain, tested code places the pins and computes the DIGIPIN; the model only proposes.                                                                                                                       |
+| **Speech**            | Sarvam `saaras:v4` transcribes the spoken way to the door; `bulbul:v4-flash` speaks the directions as 8 kHz AAC (about 100 KB for 20 s), made once at setup ([ADR 0007](docs/adr/0007-directions-audio-made-once-at-setup.md)). If a clip is missing, the courier's phone reads the text aloud.                                                                                                                                                     |
+| **Courier check**     | The courier page shows the door only if the grant is live in the household's ENS registry, its owner matches the key in the link, and the payload's Arkiv owner is the household. It checks again every few seconds and ends as soon as the registry says so. A failed read never counts as expired.                                                                                                                                                |
+| **Worker**            | One Cloudflare Worker holds the Claude, Sarvam and relay keys, checks household signatures, enforces a daily spend cap and kill switch, funds new households with test gas, and registers names. It runs in a US region (placement hint), because Anthropic refuses calls from some Cloudflare locations.                                                                                                                                           |
 
 ## CROPS
 
-**Honest access boundary ([ADR 0005](docs/adr/0005-expiry-is-a-public-switch-not-encryption.md)):** only a grant holder can read the shared exact-door payload; the household retains its own home key. Expiry stops future access in honest clients; nothing can make anyone unsee an address. A holder can retain the payload/key, and transaction history may retain ciphertext. Updating only live grants after a move is planned, not a completed current-door guarantee.
+**What expiry means ([ADR 0005](docs/adr/0005-expiry-is-a-public-switch-not-encryption.md)):** only someone holding a grant's link can decrypt that grant's payload. Expiry and revocation stop honest apps from showing the door again; nothing can make a courier unsee an address they already read, or delete a copy they saved.
 
-- **C — Censorship resistance:** Pata controls the host, registrar, relay and AI endpoint; refusal can stop new setup. The planned courier path reads chains without our API, but the server-off proof and parent-name pointer lock remain planned.
-- **O — Open source:** the project is [MIT licensed](LICENSE), with source and local commands available. `src/lib/digipin/` keeps India Post's [Apache-2.0 notice](src/lib/digipin/LICENSE.apache-2.0); OSM-derived data requires ODbL attribution.
-- **P — Privacy:** the host sees visits/IPs; the Worker sees signed household addresses/IPs. Planned Claude/Sarvam calls expose the way to the door and derived directions; map search gets locality/landmarks, never typed room numbers. Nox sees requests; bootstrap/direct endpoints see their traffic. Chains expose owners, labels, schema tags and timing despite encrypted contents. No provider zero-retention approval is claimed.
-- **S — Security:** HKDF identities, device storage and AES-GCM sealing are implemented. Page JavaScript can use the signing key; device storage is not a secure enclave. Passkey recovery and courier key-wiping integration are planned. Links are bearer secrets; registry state, not failed resolution, decides grant liveness.
+- **Censorship resistance:** Pata runs the host, the Worker, the gas relay and `/register`, so it can refuse to set up new homes. But a household's name, records and grants live on ENS and Arkiv. Once a link exists, the courier page reads only those chains, through Anon-RPC, and doesn't need our server.
+- **Open source:** MIT ([LICENSE](LICENSE)). India Post's DIGIPIN code keeps its [Apache-2.0 notice](src/lib/digipin/LICENSE.apache-2.0). Map data is © OpenStreetMap contributors (ODbL).
+- **Privacy:**
+  - **Encrypted:** the exact door, DIGIPIN, written address, directions and room number are stored only encrypted.
+  - **What the providers see:** Claude and Sarvam see the spoken or typed way to the door and the directions written from it. Map search sees only the locality and landmark names. The room number never leaves the phone unencrypted.
+  - **What stays visible on chain:** label names, owners, schema tags and timing.
+  - **Who sees IPs:** the Worker sees the household's signing address and IP. Map tiles come from OpenFreeMap, which sees the area being viewed.
+- **Security:** keys are derived with HKDF from a device root and kept in browser storage (passkey-derived keys are P1-3). Page JavaScript can use the keys; device storage isn't a secure enclave. Courier links are bearer secrets.
 
 ## Real vs mocked
 
-The seller and its WhatsApp-style message are deliberate mocks. Other rows target real protocols; **planned** means the app flow is not yet implemented here, not that a fake chain substitutes for it.
-
-| Part | Evidence and current status |
-| --- | --- |
-| Seller and WhatsApp message | Mock interaction; seller screen is still a placeholder. No WhatsApp integration. |
-| Names | **Real:** ENSv2 Sepolia parent registrations and implemented registration relay. Household setup integration and parent pointer lock are planned. |
-| Grants | **Planned on real ENSv2:** mint/status/unregister and approval functions remain stubs; no completed live grant demo claimed. |
-| Payloads | **Planned on real Arkiv Rabdi:** grant operations remain stubs. Home/voice `createEntity`/`getEntity` code exists on the unmerged blockchain branch. |
-| Expiry and revocation | Real registry/entity mechanisms are the design; combined courier checks and revoke flow are **planned**, not demonstrated here. |
-| Anon-RPC | **Real:** Nox read clients for Sepolia/Rabdi and recorded laptop read checks. Keyed access, phone evidence and funded write latency remain pending in [P0-5](docs/plans/P0-5-rpc.md). |
-| DIGIPIN, keys and sealing | Implemented with unit tests; no model-generated codes or mocked encryption. |
-| AI, audio and screens | Map adapters/geometry implemented; this checkout's model/speech routes and most product screens are planned placeholders. No accuracy or multilingual demo result claimed. |
+| Part                                           | Status                                                                                                                                         |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Names, resolvers, grant registries             | **Real**, ENSv2 on Sepolia, created by the app (factory deploys from the household's own account)                                              |
+| Grants: mint, expiry, liveness check           | **Real**, on chain; shown end to end on phones, including the 20 s stage grant ending by itself                                                |
+| Revocation                                     | Flow implemented and tested against live chains ([P0-12](docs/plans/P0-12.md)); the screen that lists live grants with a revoke button is P1-2 |
+| Encrypted home, voice, payload, audio, history | **Real**, Arkiv Rabdi                                                                                                                          |
+| Address AI, directions, speech in and out      | **Real** Claude and Sarvam calls through the Worker                                                                                            |
+| Map                                            | **Real** OpenStreetMap data; landmark search falls back to a hand-dropped pin when Overpass refuses                                            |
+| Gas                                            | The Worker's relay tops up each household with Sepolia ETH and Rabdi tGLM                                                                      |
+| Seller and its request                         | The consent screen's "Make a test request" form stands in for a seller app (the seller screen is P1-5)                                         |
+| Passkeys                                       | Not yet: a device-stored key (P1-3)                                                                                                            |
 
 ## Anon-RPC coverage
 
-[src/lib/rpc](src/lib/rpc/index.ts) owns the clients: one lazy Nox worker carries application reads on both chains. Writes go direct by default (`NEXT_PUBLIC_DIRECT_WRITES=1`); Nox writes can be selected, but funded acceptance remains pending. This is not an end-to-end demo claim.
+[`src/lib/rpc`](src/lib/rpc/index.ts) runs one Nox worker ([`@anon-rpc/browser-harness`](https://github.com/hisoka-io/anon-rpc)) for both chains. **Every read the app makes goes through it**, on the household's phone and the courier's. The direct exceptions, as listed in [CLAUDE.md](CLAUDE.md#invariants):
 
-The [CLAUDE.md invariants](CLAUDE.md#invariants) list these direct-call exceptions:
+1. The harness bootstrap: two Sepolia reads and the bundle download.
+2. Writes, which go direct until P1-4 (`NEXT_PUBLIC_DIRECT_WRITES=1`).
+3. Foundry deploy scripts.
+4. The Worker's own relay top-ups and `register` calls.
 
-1. Harness bootstrap: two Sepolia specifier reads and bundle download, exposing IP/network choice to bootstrap services.
-2. P0 writes before private-write acceptance lands.
-3. Foundry deployment scripts.
-4. The server's relay top-ups and household-name registrations.
-5. Planned stalled-write retry: check for a receipt, resend the **same signed bytes** directly, and tell the household. The retry helper is still a stub.
+`/lookup?debug=1` has a read-only diagnostic panel that runs five checks through Nox.
 
-## Deployed addresses and receipts
+## Evidence on chain
 
-Sepolia values recorded in [P0-2](docs/plans/P0-2.md), not new chain reads made for this draft:
+| What                                                        | Value                                                                |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| `pata.eth` UserRegistry (emancipated)                       | `0x8961FBa6e336FfC00b564d873485Cc342DD00133`                         |
+| Deployer and parent-name owner                              | `0xBe92B938A99fC0844AA2e0d5CE3296D10781F37D`                         |
+| Gas relay and registrar                                     | `0x8E395a6B313698a042A781B2E2356aB3A0C1a678`                         |
+| `pata.eth` subregistry lock (`revokeRoles`, block 12075385) | `0x126932d62eb40f75f1edfa7d47459211922008cf77d87dd1c90429b0a5053d8d` |
+| `pata.eth` register                                         | `0x2b6930c36c0772ab504a8bb511b365a4cfc414f0444da5dd1ef6e245badf92e5` |
+| `digipin.eth` register                                      | `0x2169a5c3044af773fafa07f3540cc98d504192ddf7cdb6cd41a94bb53df52d7d` |
+| Household made on a phone: `test1.pata.eth`, owner          | `0x9538bf96982D1fD3b6036A4879213fE795Fd02BB`                         |
 
-| Role | Address |
-| --- | --- |
-| `pata.eth` UserRegistry proxy | `0x8961FBa6e336FfC00b564d873485Cc342DD00133` |
-| Deployer / parent-name owner | `0xBe92B938A99fC0844AA2e0d5CE3296D10781F37D` |
-| Relay / registrar | `0x8E395a6B313698a042A781B2E2356aB3A0C1a678` |
+**An Arkiv query you can run:** POST this to `https://rpc.rabdi.db-chain.testnet.arkiv.network`. It lists that household's encrypted voice records: keys and expiry only, with nothing readable. Swap the schema for `pata.home.v1` or `pata.history.v1`. Other schemas, keys and receipts are in [arkiv/schema.md](arkiv/schema.md) and [P0-3](docs/plans/P0-3.md).
 
-P0-2 records `isEmancipated() = true`. The irreversible parent subregistry-pointer lock is **planned**, waiting for the first working household.
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "arkiv_query",
+  "params": [
+    "arkiv.schema = str('pata.voice.v1') AND $owner = addr(0x9538bf96982D1fD3b6036A4879213fE795Fd02BB)",
+    { "select": { "key": true, "expiresAt": true } }
+  ]
+}
+```
 
-| Transaction | Sepolia hash |
-| --- | --- |
-| Registry `deployProxy` | `0x89f8cacf1f30dd78619ffaf740d963998ab2f5834e5dd88adee464d01b6be3bf` |
-| `pata.eth` commit | `0x0306ab6fd81f80d1e23e7ec7e731fc5f5c39521913b57ca5e4ba3b35d11de94d` |
-| `pata.eth` register | `0x2b6930c36c0772ab504a8bb511b365a4cfc414f0444da5dd1ef6e245badf92e5` |
-| `digipin.eth` commit | `0xff4bdba41b257aaacf3597bdafe3bd0dfd46a6804d937a3ea3dc89ddcc16fbc0` |
-| `digipin.eth` register | `0x2169a5c3044af773fafa07f3540cc98d504192ddf7cdb6cd41a94bb53df52d7d` |
+Arkiv write-ups: [why Arkiv](arkiv/why-arkiv.md), [how we use it](arkiv/how-you-use-arkiv.md), [reach](arkiv/reach.md), [friction](arkiv/friction.md).
 
-**Arkiv writing household addresses:** TODO after demo household. The relay/deployer above are not substitutes for a verified entity writer.<br>
-**Judge-runnable `arkiv_query` with live entity evidence:** TODO after demo household. See [schema](arkiv/schema.md), [why Arkiv](arkiv/why-arkiv.md), [usage](arkiv/how-you-use-arkiv.md), [reach](arkiv/reach.md) and [friction](arkiv/friction.md).
+## Known limitations
+
+- **Some Wi-Fi networks block Anon-RPC.** If lookups or the courier page stall, switch to mobile data. After a few failed checks, the courier page says so.
+- **Landmark pins appear mostly in Dharavi and BKC.** Overpass often refuses requests from Cloudflare, so other areas usually get the hand-dropped pin, placed by a tap on the map. When "area, PIN" isn't in OpenStreetMap, the search uses the PIN code's own area.
+- **Spoken Marathi input** is P1-7. Hindi and English work; the directions are spoken in all three languages.
+- **Map tiles** come from OpenFreeMap, not yet the bundled extract, so the tile host sees the area viewed.
+- **There's no IPFS pin yet** ([ADR 0001](docs/adr/0001-stable-host-plus-ipfs-pin.md)).
 
 ## AI use
 
-Attribution combines reachable `git log --grep "AI:"` commit bodies and changed paths with the owner's record of early Claude Code work. Untagged work is not assumed human-written.
+ETHGlobal asks which parts AI wrote. Commits where an agent wrote code end with `AI: Codex` or `AI: Claude Code`. List them with `git log --grep "AI:"`; on 2026-11-06 alone, over 120 commits carry `AI: Codex` and over 50 carry `AI: Claude Code`. Commits from before about 04:00 IST on 2026-11-06 may lack the trailer; the table below covers them.
 
-Commits before 2026-11-06 ~04:00 IST may lack AI trailers; this section is the complete record.
+| Tool                        | What it wrote                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Codex** (each teammate's) | Most ticket code: keys, sealing and Nox RPC (`src/lib/{keys,seal,rpc}`); DIGIPIN and geometry; ENS and Arkiv modules, setup, grant, courier and revoke flows (`src/lib/{ens,arkiv,flows}`); the address AI, speech and map routes (`server/src/{ai,speech,geo,routes}`); the Worker guard and relay; the screens and components (`src/app`, `src/components`); `src/lib/link`; and the tests and plan files for each.                                                                                                                                                                                                                                                                                                  |
+| **Claude Code**             | **Before kick-off:** planning and research (`idea.md`, `research.md`, `docs/research/*`, ADRs 0001–0008, `GLOSSARY.md`, `docs/plan.md`, `docs/tickets.md`).<br>**P0-1:** the scaffold and interfaces (`shared/`, module stubs, the check gate, `AGENTS.md`, `docs/team/*`); the owner scripts in `scripts/`.<br>**Reviews:** reviews and merges of every branch.<br>**Fixes from the phone runs on 2026-11-06:** AAC audio and the grant audio entity (ADR 0009); the screens' switch from fake to real flows; deploy nonces; Arkiv gas; model retries, the Sonnet fallback and failure-category logs; the Worker's US placement; the PIN-code locality fallback; tap-to-place pins; courier polling; and this README. |
 
-| Tool | Files and parts assisted |
-| --- | --- |
-| Codex | `src/lib/keys/`, `src/lib/seal/`, `src/lib/rpc/`: identities, storage, encryption, RPC and tests. `src/lib/digipin/`, `shared/geo.ts`, `server/src/geo/`: encoding, geometry, map adapters and tests. Worker guard/router/relay and topup/register routes, `src/lib/server-client/{signed,index}`, `scripts/smoke-worker*`: protected server calls and checks. Associated plans and this README/Arkiv prose are AI-written or AI-edited. |
-| Claude Code | **Before kick-off, planning and research written under the owner's direction:** `idea.md`, `research.md`, `docs/research/*`, `docs/adr/0001`–`0007`, `GLOSSARY.md`, `SETUP.md`, `docs/plan.md`, `docs/tickets.md`.<br>**P0-1 scaffold and interfaces:** Next.js/Foundry/Worker setup; `shared/` domain, constants and API contract; `src/lib/` and `server/src/` module stubs and signatures; screen stubs; `contracts/` resolver stub and vendored interface; the check gate; `AGENTS.md`, `docs/team/*`, `CODEOWNERS`.<br>**Owner scripts:** `scripts/env-file.mjs`, `scripts/check-env.mjs`, `scripts/balances.mjs`, `scripts/rotate-keys.mjs`, `scripts/check-names.mjs`, `scripts/register-parent-names.mjs`, `scripts/lock-pata.mjs`, `scripts/fund-relay.mjs` (including trailer-bearing `066f311`, `5b1b6c9`, `dbfcd1f`).<br>**Reviews:** code review of every merged branch. |
-
-Representative Codex commits: `90b2b61` (sealing), `6b66128` (keys), `28e7c1b` (RPC), `b689f3d` (DIGIPIN), `f90e32a` (map adapter), `d96b9cd` (relay), `58f4c46` (smoke). Unmerged home/voice code reviewed for this draft also has Codex trailers; it is not presented as integrated.
-
-People supplied the product requirements and review decisions. The owner performed account/funding/hosting setup and the parent transactions recorded in P0-2. Human phone tests, consented fieldwork, rehearsal and video narration remain planned unless recorded separately. Specs and team guidance remain in [idea.md](idea.md), [research.md](research.md), [team guide](docs/team/README.md) and [ticket plans](docs/plans/README.md).
+People set the requirements and made the review decisions. The owner did all account, funding and deploy steps and the parent-name transactions, and ran the phone tests.
 
 ## Run locally
 
-Prerequisites: Node 22/npm and Foundry 1.8.7 on PATH; see [SETUP.md](SETUP.md).
+Prerequisites: Node 22 and Foundry 1.8.7 on PATH ([SETUP.md](SETUP.md)).
 
-1. Initialize dependencies:
+```sh
+git submodule update --init --recursive
+npm install
+npm run check          # typecheck, unit tests, forge test
+npm run dev            # app on http://localhost:3000
+npm run server:dev     # Worker on http://localhost:8787 (second terminal)
+```
 
-   ```sh
-   git submodule update --init --recursive
-   npm install
-   ```
+Copy `.env.example` to `.env.local` and fill in the public `NEXT_PUBLIC_*` settings (for a local Worker, `NEXT_PUBLIC_SERVER_URL=http://localhost:8787`). Worker secrets go in `server/.dev.vars`. Never commit either file.
 
-2. Copy `.env.example` to your own ignored `.env.local`, fill required public settings, and use `NEXT_PUBLIC_SERVER_URL=http://localhost:8787`. Put private Worker bindings in ignored `server/.dev.vars` as described in `.env.example`; never put secrets in `NEXT_PUBLIC_*`, paste them into tools or commit them.
-3. Run the gate and app:
+Other commands:
 
-   ```sh
-   npm run check
-   npm run dev
-   ```
-
-4. In a second terminal:
-
-   ```sh
-   npm run server:dev
-   ```
-
-App: `http://localhost:3000`; Worker: `http://localhost:8787`. These commands run the draft and its placeholders, not the planned full demo. `npm run build` exports to `out/`; Playwright runs separately with `npm run e2e`. CLI tests: `node --test scripts/smoke-worker.test.mjs`. Only the owner deploys from an up-to-date `main`.
+- `npm run build` exports the app to `out/`.
+- `npm run e2e` runs Playwright.
+- `node scripts/smoke-worker.mjs` checks a deployed Worker.
 
 ## Licence
 
-The project is licensed under [MIT](LICENSE), copyright 2026 Pata contributors. India Post's DIGIPIN code in `src/lib/digipin/` retains its [Apache-2.0 licence and notice](src/lib/digipin/LICENSE.apache-2.0). Third-party code and OSM-derived data retain their respective licences.
+[MIT](LICENSE), copyright 2026 Pata contributors. India Post's DIGIPIN code in `src/lib/digipin/` keeps its [Apache-2.0 licence and notice](src/lib/digipin/LICENSE.apache-2.0). Third-party code and OpenStreetMap data keep their own licences.
