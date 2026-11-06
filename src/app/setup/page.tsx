@@ -149,10 +149,20 @@ export default function SetupPage() {
       setCandidates(ranked.candidates);
       setBbox(ranked.bbox);
       setScreen("pin");
-    } catch {
-      setPinsError(
-        "We could not search for nearby landmarks right now. Please tap Retry.",
-      );
+    } catch (failure) {
+      if (flows.isLocalityNotFound(failure)) {
+        // Neither "area, PIN" nor the PIN alone is on the map: let the household correct them.
+        setManualArea(loc.name);
+        setManualPinCode(loc.pinCode);
+        setNeedsLocalityPrompt(true);
+        setPinsError(
+          `We couldn't find "${loc.name}, ${loc.pinCode}" on the map. Check the area name and 6-digit PIN code below.`,
+        );
+      } else {
+        setPinsError(
+          "We could not search for nearby landmarks right now. Please tap Retry.",
+        );
+      }
     } finally {
       setPinsLoading(false);
     }

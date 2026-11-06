@@ -63,3 +63,13 @@ it("explains a failed description in plain words without echoing the raw error",
   const generic = describeTheWayError(new Error("https://private.example request body"));
   expect(generic).toBe("Could not understand the address description right now. Please tap Retry.");
 });
+
+it("tells a missing locality apart from a temporary landmark-search failure", async () => {
+  const { isLocalityNotFound } = await import("./setup-household");
+  const { ServerError } = await import("../server-client/signed");
+  expect(isLocalityNotFound(new ServerError(422, "locality_not_found", "Locality not found"))).toBe(true);
+  expect(isLocalityNotFound(new ServerError(502, "address_unavailable", "Address search unavailable"))).toBe(
+    false,
+  );
+  expect(isLocalityNotFound(new Error("network"))).toBe(false);
+});
