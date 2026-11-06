@@ -14,6 +14,7 @@ import type { HouseholdKeys } from "../../lib/keys";
 import type { HouseholdState } from "../../lib/keys/store";
 import { approveGrant, loadHousehold, type ApprovedGrant } from "../../lib/flows/approve-grant";
 import { signIn } from "../../lib/flows/setup-household";
+import { checkRequester, handOffUrl, type RequesterCheck } from "../../lib/flows/requester";
 
 const LANGUAGE_NAME: Record<Language, string> = {
   hi: "Hindi (हिंदी)",
@@ -158,6 +159,13 @@ export default function ApprovePage() {
   const [approveError, setApproveError] = useState<string | null>(null);
   const [approved, setApproved] = useState<ApprovedGrant | null>(null);
   const [copied, setCopied] = useState(false);
+  // P1-5: what the requester's own ENS name says about it. Keyed by name, so a new request re-checks.
+  const [requesterCheck, setRequesterCheck] = useState<{
+    forName: string;
+    result: RequesterCheck | { state: "error"; message: string };
+  } | null>(null);
+  const [checkAttempt, setCheckAttempt] = useState(0);
+  const [handOffError, setHandOffError] = useState<string | null>(null);
 
   // "Make a test request" builder form state (user types it; never hard-coded)
   const [testRequesterName, setTestRequesterName] = useState("");
@@ -209,6 +217,44 @@ export default function ApprovePage() {
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
+
+  const ensName = request?.requester.ensName ?? null;
+  useEffect(() => {
+    if (!ensName) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const result = await checkRequester(ensName);
+        if (active) setRequesterCheck({ forName: ensName, result });
+      } catch (failure) {
+        if (active)
+          setRequesterCheck({
+            forName: ensName,
+            result: {
+              state: "error",
+              message: failure instanceof Error ? failure.message : "Couldn't check who is asking right now.",
+            },
+          });
+      }
+    };
+    void check();
+    return () => {
+      active = false;
+    };
+  }, [ensName, checkAttempt]);
+  const requesterResult =
+    ensName && requesterCheck?.forName === ensName ? requesterCheck.result : null;
+  const handOffEndpoint =
+    requesterResult?.state === "verified" ? requesterResult.endpoint : null;
+
+  const handleHandOff = () => {
+    if (!approved || !handOffEndpoint) return;
+    try {
+      window.location.href = handOffUrl(handOffEndpoint, approved.courierLink);
+    } catch {
+      setHandOffError("Couldn't send the link there. Share it instead.");
+    }
+  };
 
   const handleBuildTestRequest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -402,6 +448,53 @@ export default function ApprovePage() {
             </div>
           </div>
 
+          {/* P1-5: who is asking, as its own public name describes it */}
+          {ensName && !requesterResult && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3 text-xs text-[#6E655A]">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+              <span>Checking {ensName}…</span>
+            </div>
+          )}
+          {requesterResult?.state === "verified" && (
+            <div data-testid="requester-verified" className="rounded-xl border border-[#046A38]/40 bg-[#E3F2E8] p-3.5">
+              <p className="text-[10px] font-bold tracking-wider text-[#046A38] uppercase">
+                ✓ Checked on its public name
+              </p>
+              <p className="mt-1 text-sm leading-snug text-[#1F1C18]">{requesterResult.about}</p>
+              <p className="mt-1.5 text-[11px] text-[#35593F]">
+                {requesterResult.endpointHost
+                  ? `If you approve, the link goes to ${requesterResult.endpointHost}, the page this name lists.`
+                  : "This name lists no page to send the link to; share it yourself."}
+              </p>
+            </div>
+          )}
+          {requesterResult?.state === "unverified" && (
+            <div role="alert" className="rounded-xl border border-[#B8862D]/50 bg-[#FBF3E4] p-3.5">
+              <p className="text-xs font-bold text-[#7A5615]">
+                {requesterResult.ensName} doesn&apos;t say who it is
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-[#7A5615]">
+                Its public name has no description, so anyone could have sent this. Only approve if
+                you know who is asking.
+              </p>
+            </div>
+          )}
+          {requesterResult?.state === "error" && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-[#D9534F]/30 bg-[#FDF3F2] p-3">
+              <p className="text-xs font-medium text-[#8A2522]">{requesterResult.message}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setRequesterCheck(null);
+                  setCheckAttempt((n) => n + 1);
+                }}
+                className="shrink-0 rounded-lg bg-[#046A38] px-3 py-1.5 text-xs font-semibold text-[#FFFDF9]"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Mandatory Prominent Bearer-Secret Warning (ADR 0006) */}
           <div className="rounded-xl bg-[#1F1C18] p-4 text-[#FAF5EC] shadow-xs">
             <div className="flex items-start gap-3">
@@ -506,6 +599,26 @@ export default function ApprovePage() {
               Anyone with this link can find your door until it ends.
             </p>
           </div>
+
+          {/* P1-5: hand the link to the page the requester's name lists (ADR 0013) */}
+          {handOffEndpoint && requesterResult?.state === "verified" && (
+            <button
+              type="button"
+              data-testid="hand-off"
+              onClick={handleHandOff}
+              className="flex w-full flex-col items-center justify-center rounded-xl bg-[#1F1C18] px-4 py-3 text-sm font-semibold text-[#FFFDF9] shadow-sm transition hover:bg-black"
+            >
+              <span>Send link to {request.requester.displayName} →</span>
+              <span className="text-[11px] font-normal text-[#E6DAC6]">
+                {requesterResult.ensName} · {requesterResult.endpointHost}
+              </span>
+            </button>
+          )}
+          {handOffError && (
+            <p role="alert" className="text-xs font-medium text-[#8A2522]">
+              {handOffError}
+            </p>
+          )}
 
           {/* Share / Copy CTA */}
           <button
