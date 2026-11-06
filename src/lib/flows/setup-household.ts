@@ -30,7 +30,7 @@ import {
   textToSpeech,
 } from "../server-client";
 import { shortenDirections } from "../server-client/directions-text";
-import { deployHouseholdContracts } from "../ens/household";
+import { deployHouseholdContracts, householdLabelStatus } from "../ens/household";
 import { dnsEncode, isValidHouseholdLabel } from "../ens/names";
 import { universalHelperAbi } from "../ens/abis";
 import { sepoliaPublicClient, arkivPublicClient } from "../rpc";
@@ -51,6 +51,15 @@ export async function signIn(): Promise<HouseholdKeys> {
     }
     return deriveHouseholdKeys(root);
   });
+}
+
+/** Step 1: a default name (never derived from the address; names are public, ADR 0006). */
+export { suggestHouseholdLabel } from "../ens/names";
+
+/** Step 1: whether a household label can be registered in pata.eth. Reserved counts as taken. */
+export async function checkHouseholdName(label: string): Promise<"available" | "taken" | "invalid"> {
+  if (!isValidHouseholdLabel(label)) return "invalid";
+  return (await householdLabelStatus(label)) === 0 ? "available" : "taken";
 }
 
 /** Step 2: spoken (Blob) or typed (string) way to the door → transcript, locality, landmark phrases. */
