@@ -5,6 +5,13 @@
 // 4. Read the payload; its Arkiv $owner must equal householdOwner(household name). Missing → ended.
 // 5. Poll both every few seconds; whichever ends first → "ended", clear sessionStorage.
 import type { GrantPayload, Locality } from "../../../shared/domain";
+import { parseCourierFragment } from "../link";
+import { lookupLocality, householdOwner } from "../ens/lookup";
+import { grantStatusByName } from "../ens/grants";
+import { deriveGrantIdentity } from "../keys";
+import { readGrantPayload } from "../arkiv";
+import { PROVIDER_NAME } from "../../../shared/constants";
+import { isValidHouseholdLabel } from "../ens/names";
 
 export type CourierView =
   | { state: "checking"; locality: Locality | null }
@@ -14,6 +21,27 @@ export type CourierView =
 
 /** One check of both signals. The /c page calls it on load and on a timer. */
 export async function checkCourierLink(fragmentOrStored: string): Promise<CourierView> {
-  void fragmentOrStored;
-  throw new Error("checkCourierLink: not implemented (P0-11)");
+  const link = parseCourierFragment(fragmentOrStored);
+  if (!link) return { state: "invalid" };
+  const suffix = `.${PROVIDER_NAME}`;
+  if (!link.householdName.endsWith(suffix) ||
+    !isValidHouseholdLabel(link.householdName.slice(0, -suffix.length)) ||
+    !/^0x[\da-fA-F]{64}$/.test(link.payloadKey) || link.sessionKey.length !== 32) {
+    link.sessionKey.fill(0);
+    return { state: "invalid" };
+  }
+  let locality: Locality | null = null;
+  try { locality = await lookupLocality(link.householdName); } catch { /* Public locality can be retried independently. */ }
+  try {
+  const identity = await deriveGrantIdentity(link.sessionKey);
+  const status = await grantStatusByName(`${identity.label}.${link.householdName}`);
+  if (!status.live || status.owner.toLowerCase() !== identity.owner.address.toLowerCase())
+    return { state: "ended", locality };
+  const owner = await householdOwner(link.householdName);
+  if (!owner) return { state: "ended", locality };
+  const opened = await readGrantPayload(link.payloadKey, identity.sealKey, owner);
+  if (!opened) return { state: "ended", locality };
+  return locality ? { state: "live", locality, payload: opened.payload } : { state: "checking", locality };
+  } catch { return { state: "checking", locality }; }
+  finally { link.sessionKey.fill(0); }
 }
