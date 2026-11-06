@@ -28,8 +28,13 @@ it("treats a decoded LabelExpired race as ended without swallowing unrelated fai
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   rpc.readContract.mockResolvedValue(2);
   const abi = parseAbi(["error LabelExpired(uint256 tokenId)"]);
-  rpc.writeContract.mockRejectedValueOnce(new ContractFunctionRevertedError({ abi, functionName: "unregister",
-    data: encodeErrorResult({ abi, errorName: "LabelExpired", args: [1n] }) }));
+  rpc.writeContract.mockRejectedValueOnce(
+    new ContractFunctionRevertedError({
+      abi,
+      functionName: "unregister",
+      data: encodeErrorResult({ abi, errorName: "LabelExpired", args: [1n] }),
+    }),
+  );
   expect(await unregisterGrant(keys, contracts, "abcdefgh")).toBe("already-ended");
   rpc.writeContract.mockRejectedValueOnce(new Error("LabelExpired secret request"));
   await expect(unregisterGrant(keys, contracts, "abcdefgh")).rejects.toThrow(/^Could not unregister grant$/);
@@ -44,10 +49,13 @@ it("unregisters a live label by labelhash, but sends nothing for an ended label"
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   rpc.readContract.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
   expect(await unregisterGrant(keys, contracts, "abcdefgh")).toBe("revoked");
-  expect(rpc.writeContract).toHaveBeenCalledWith(expect.objectContaining({
-    functionName: "unregister", address: contracts.grantRegistry,
-    args: [BigInt("0x48624fa43c68d5c552855a4e2919e74645f683f5384f72b5b051b71ea41d4f2d")],
-  }));
+  expect(rpc.writeContract).toHaveBeenCalledWith(
+    expect.objectContaining({
+      functionName: "unregister",
+      address: contracts.grantRegistry,
+      args: [BigInt("0x48624fa43c68d5c552855a4e2919e74645f683f5384f72b5b051b71ea41d4f2d")],
+    }),
+  );
   expect(await unregisterGrant(keys, contracts, "abcdefgh")).toBe("already-ended");
   expect(rpc.writeContract).toHaveBeenCalledTimes(1);
 });

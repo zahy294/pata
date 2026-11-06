@@ -17,16 +17,27 @@ export interface RevocationCheckpoint {
   complete?: boolean;
 }
 
-export async function loadRevocationCheckpoint(address: `0x${string}`, payloadKey: `0x${string}`): Promise<RevocationCheckpoint | null> {
+export async function loadRevocationCheckpoint(
+  address: `0x${string}`,
+  payloadKey: `0x${string}`,
+): Promise<RevocationCheckpoint | null> {
   if (typeof indexedDB === "undefined") return null;
-  return (await transaction<RevocationCheckpoint | undefined>("readonly", store =>
-    store.get(`revoke:${address.toLowerCase()}:${payloadKey.toLowerCase()}`))) ?? null;
+  return (
+    (await transaction<RevocationCheckpoint | undefined>("readonly", (store) =>
+      store.get(`revoke:${address.toLowerCase()}:${payloadKey.toLowerCase()}`),
+    )) ?? null
+  );
 }
 
-export async function saveRevocationCheckpoint(address: `0x${string}`, payloadKey: `0x${string}`, checkpoint: RevocationCheckpoint): Promise<void> {
+export async function saveRevocationCheckpoint(
+  address: `0x${string}`,
+  payloadKey: `0x${string}`,
+  checkpoint: RevocationCheckpoint,
+): Promise<void> {
   if (typeof indexedDB === "undefined") throw new Error("Device storage is unavailable");
-  await transaction("readwrite", store =>
-    store.put(checkpoint, `revoke:${address.toLowerCase()}:${payloadKey.toLowerCase()}`));
+  await transaction("readwrite", (store) =>
+    store.put(checkpoint, `revoke:${address.toLowerCase()}:${payloadKey.toLowerCase()}`),
+  );
 }
 
 /** A setup journal holds exact-address input only inside household-sealed bytes. */

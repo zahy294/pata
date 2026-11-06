@@ -82,7 +82,9 @@ export async function grantStatusByName(grantName: string): Promise<GrantStatus>
   try {
     const owner = await householdOwner(grantName);
     return owner ? { live: true, owner } : { live: false };
-  } catch { throw new Error("Could not read grant status"); }
+  } catch {
+    throw new Error("Could not read grant status");
+  }
 }
 
 /** Status read, then unregister if live. Returns "already-ended" without a transaction otherwise. */
@@ -95,18 +97,33 @@ export async function unregisterGrant(
     if (!/^[a-z2-7]{8}$/.test(label)) throw new Error("Invalid grant label");
     const client = sepoliaPublicClient();
     const id = BigInt(labelhash(label));
-    const status = await client.readContract({ address: contracts.grantRegistry,
-      abi: userRegistryAbi, functionName: "getStatus", args: [id] });
+    const status = await client.readContract({
+      address: contracts.grantRegistry,
+      abi: userRegistryAbi,
+      functionName: "getStatus",
+      args: [id],
+    });
     if (status !== 2) return "already-ended";
-    const request = { chain: sepolia, account: keys.account, address: contracts.grantRegistry,
-      abi: userRegistryAbi, functionName: "unregister" as const, args: [id] as const };
+    const request = {
+      chain: sepolia,
+      account: keys.account,
+      address: contracts.grantRegistry,
+      abi: userRegistryAbi,
+      functionName: "unregister" as const,
+      args: [id] as const,
+    };
     const hash = await sepoliaWalletClient(keys.account).writeContract(request);
     const receipt = await client.waitForTransactionReceipt({ hash });
-    if (receipt.status !== "success") { await client.simulateContract(request); throw new Error("Reverted"); }
+    if (receipt.status !== "success") {
+      await client.simulateContract(request);
+      throw new Error("Reverted");
+    }
     return "revoked";
   } catch (error) {
-    const reverted = error instanceof BaseError
-      ? error.walk(cause => cause instanceof ContractFunctionRevertedError) : undefined;
+    const reverted =
+      error instanceof BaseError
+        ? error.walk((cause) => cause instanceof ContractFunctionRevertedError)
+        : undefined;
     if (reverted instanceof ContractFunctionRevertedError && reverted.data?.errorName === "LabelExpired")
       return "already-ended";
     throw new Error("Could not unregister grant");

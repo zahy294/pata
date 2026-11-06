@@ -24,24 +24,34 @@ export async function checkCourierLink(fragmentOrStored: string): Promise<Courie
   const link = parseCourierFragment(fragmentOrStored);
   if (!link) return { state: "invalid" };
   const suffix = `.${PROVIDER_NAME}`;
-  if (!link.householdName.endsWith(suffix) ||
+  if (
+    !link.householdName.endsWith(suffix) ||
     !isValidHouseholdLabel(link.householdName.slice(0, -suffix.length)) ||
-    !/^0x[\da-fA-F]{64}$/.test(link.payloadKey) || link.sessionKey.length !== 32) {
+    !/^0x[\da-fA-F]{64}$/.test(link.payloadKey) ||
+    link.sessionKey.length !== 32
+  ) {
     link.sessionKey.fill(0);
     return { state: "invalid" };
   }
   let locality: Locality | null = null;
-  try { locality = await lookupLocality(link.householdName); } catch { /* Public locality can be retried independently. */ }
   try {
-  const identity = await deriveGrantIdentity(link.sessionKey);
-  const status = await grantStatusByName(`${identity.label}.${link.householdName}`);
-  if (!status.live || status.owner.toLowerCase() !== identity.owner.address.toLowerCase())
-    return { state: "ended", locality };
-  const owner = await householdOwner(link.householdName);
-  if (!owner) return { state: "ended", locality };
-  const opened = await readGrantPayload(link.payloadKey, identity.sealKey, owner);
-  if (!opened) return { state: "ended", locality };
-  return locality ? { state: "live", locality, payload: opened.payload } : { state: "checking", locality };
-  } catch { return { state: "checking", locality }; }
-  finally { link.sessionKey.fill(0); }
+    locality = await lookupLocality(link.householdName);
+  } catch {
+    /* Public locality can be retried independently. */
+  }
+  try {
+    const identity = await deriveGrantIdentity(link.sessionKey);
+    const status = await grantStatusByName(`${identity.label}.${link.householdName}`);
+    if (!status.live || status.owner.toLowerCase() !== identity.owner.address.toLowerCase())
+      return { state: "ended", locality };
+    const owner = await householdOwner(link.householdName);
+    if (!owner) return { state: "ended", locality };
+    const opened = await readGrantPayload(link.payloadKey, identity.sealKey, owner);
+    if (!opened) return { state: "ended", locality };
+    return locality ? { state: "live", locality, payload: opened.payload } : { state: "checking", locality };
+  } catch {
+    return { state: "checking", locality };
+  } finally {
+    link.sessionKey.fill(0);
+  }
 }

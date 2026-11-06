@@ -11,22 +11,30 @@ import { zeroAddress } from "viem";
 export async function lookupLocality(householdName: string): Promise<Locality | null> {
   try {
     const client = sepoliaPublicClient();
-    const [name, pinCode] = await Promise.all(["location", "eth.pata.pincode"].map(key =>
-      client.getEnsText({ name: householdName, key, universalResolverAddress: ENS.universalResolver }),
-    ));
+    const [name, pinCode] = await Promise.all(
+      ["location", "eth.pata.pincode"].map((key) =>
+        client.getEnsText({ name: householdName, key, universalResolverAddress: ENS.universalResolver }),
+      ),
+    );
     return name && pinCode ? { name, pinCode } : null;
-  } catch { throw new Error("Could not read locality"); }
+  } catch {
+    throw new Error("Could not read locality");
+  }
 }
 
 /** Owner address of a household name (the courier view checks the payload's Arkiv $owner against it). */
 export async function householdOwner(householdName: string): Promise<`0x${string}` | null> {
   try {
     const owner = await sepoliaPublicClient().readContract({
-      address: ENS.universalHelper, abi: universalHelperAbi,
-      functionName: "findExactOwner", args: [dnsEncode(householdName)],
+      address: ENS.universalHelper,
+      abi: universalHelperAbi,
+      functionName: "findExactOwner",
+      args: [dnsEncode(householdName)],
     });
     return owner === zeroAddress ? null : owner;
-  } catch { throw new Error("Could not read household owner"); }
+  } catch {
+    throw new Error("Could not read household owner");
+  }
 }
 
 /** `39j49ll8t4.digipin.eth` → the cell centre, via the DigipinResolver (P1-1). */

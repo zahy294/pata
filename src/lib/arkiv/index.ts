@@ -166,7 +166,10 @@ export async function readGrantPayload(
   try {
     const row = await arkivPublicClient().getEntity(payloadKey, grantSchema);
     if (row.$owner.toLowerCase() !== expectedOwner.toLowerCase()) return null;
-    return { payload: await openJson<GrantPayload>(sessionSealKey, hexToBytes(row.payload.value)), owner: row.$owner };
+    return {
+      payload: await openJson<GrantPayload>(sessionSealKey, hexToBytes(row.payload.value)),
+      owner: row.$owner,
+    };
   } catch (error) {
     if (error instanceof NoEntityFoundError) return null;
     throw new Error("Could not read grant payload");
@@ -186,15 +189,27 @@ export async function deleteGrantPayload(keys: HouseholdKeys, payloadKey: Entity
 
 export async function createHistoryEntry(keys: HouseholdKeys, entry: HistoryEntry): Promise<EntityKey> {
   try {
-    const existing = await findSealedRecord(keys, historySchema,
-      async sealed => canonicalJson(await openJson(keys.sealKey, sealed)) === canonicalJson(entry));
+    const existing = await findSealedRecord(
+      keys,
+      historySchema,
+      async (sealed) => canonicalJson(await openJson(keys.sealKey, sealed)) === canonicalJson(entry),
+    );
     if (existing) return existing;
     const sealed = await sealJson(keys.sealKey, entry);
     if (sealed.length > ARKIV_MAX_BYTES) throw new Error("History too large");
-    return (await arkivWalletClient(keys.account).createEntity(historySchema, { sealed: bytes(sealed) }, {
-      expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS), flags: { readonly: true },
-    })).entityKey;
-  } catch { throw new Error("Could not create history entry"); }
+    return (
+      await arkivWalletClient(keys.account).createEntity(
+        historySchema,
+        { sealed: bytes(sealed) },
+        {
+          expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS),
+          flags: { readonly: true },
+        },
+      )
+    ).entityKey;
+  } catch {
+    throw new Error("Could not create history entry");
+  }
 }
 
 /** Live-access list (P1-2): payload keys + expiry from an owner query. Details come from history entries. */
@@ -204,23 +219,38 @@ export async function listLiveGrants(keys: HouseholdKeys, householdName?: string
     if (!name) throw new Error("Household name required");
     const grants: LiveGrant[] = [];
     for (let offset = 0; ; offset += 100) {
-      const page = await arkivPublicClient().select({ $key: true, $owner: true, index: true })
-        .from(grantSchema).ownedBy(keys.address).orderBy(asc("$key")).limit(100).offset(offset).fetch();
+      const page = await arkivPublicClient()
+        .select({ $key: true, $owner: true, index: true })
+        .from(grantSchema)
+        .ownedBy(keys.address)
+        .orderBy(asc("$key"))
+        .limit(100)
+        .offset(offset)
+        .fetch();
       for (const row of page.entities) {
         if (row.$owner.toLowerCase() !== keys.address.toLowerCase()) continue;
         let index: Omit<LiveGrant, "payloadKey">;
         try {
           index = await openJson(keys.sealKey, hexToBytes(row.index.value));
-          if (!/^[a-z2-7]{8}$/.test(index.grantLabel) || !Number.isSafeInteger(index.grantEnd) ||
-            typeof index.purpose !== "string" || typeof index.requester?.displayName !== "string") continue;
-        } catch { continue; }
+          if (
+            !/^[a-z2-7]{8}$/.test(index.grantLabel) ||
+            !Number.isSafeInteger(index.grantEnd) ||
+            typeof index.purpose !== "string" ||
+            typeof index.requester?.displayName !== "string"
+          )
+            continue;
+        } catch {
+          continue;
+        }
         if ((await grantStatusByName(`${index.grantLabel}.${name}`)).live)
           grants.push({ ...index, payloadKey: row.$key });
       }
       if (page.entities.length + page.skipped < 100) break;
     }
     return grants.sort((a, b) => a.grantEnd - b.grantEnd);
-  } catch { throw new Error("Could not list live grants"); }
+  } catch {
+    throw new Error("Could not list live grants");
+  }
 }
 
 export async function listHistory(keys: HouseholdKeys): Promise<HistoryEntry[]> {
