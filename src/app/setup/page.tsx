@@ -764,7 +764,7 @@ export default function SetupPage() {
                     <AudioPlayer
                       lang={lang.code}
                       label={`${lang.sub} directions`}
-                      mp3Bytes={voiceClips[lang.code]}
+                      audioBytes={voiceClips[lang.code]}
                       fallbackText={directions[lang.code]}
                     />
                     <div className="min-w-0 flex-1">

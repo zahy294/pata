@@ -180,17 +180,17 @@ export async function makeDirections(
     en: `Enter opposite ${primaryLandmark}. Follow the lane past the blue gate to the doorway.`,
   };
 
-  // Minimal valid MP3 frame bytes for fake clip storage
-  const dummyMp3 = new Uint8Array([
-    0xff, 0xf3, 0x48, 0xc4, 0x00, 0x00, 0x00, 0x03, 0x48, 0x00, 0x00, 0x00,
+  // Minimal valid 8 kHz ADTS AAC frame bytes for fake clip storage
+  const dummyAac = new Uint8Array([
+    0xff, 0xf1, 0x6c, 0x40, 0x01, 0x00, 0x00, 0xde,
   ]);
 
   return {
     directions,
     clips: {
-      hi: dummyMp3,
-      mr: dummyMp3,
-      en: dummyMp3,
+      hi: dummyAac,
+      mr: dummyAac,
+      en: dummyAac,
     },
   };
 }
@@ -372,6 +372,7 @@ export async function checkCourierLink(
     state: "live",
     locality,
     payload,
+    audio: null,
   };
 }
 

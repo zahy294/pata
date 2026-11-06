@@ -250,7 +250,7 @@ export default function CourierPage() {
           <section className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4 shadow-sm">
             <div className="flex items-start gap-3.5">
               <AudioPlayer
-                mp3Base64={view.payload.audioMp3Base64 || undefined}
+                audioBytes={view.audio}
                 fallbackText={view.payload.directions}
                 lang={view.payload.language}
                 label="doorstep directions"

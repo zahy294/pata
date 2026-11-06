@@ -1,11 +1,10 @@
 "use client";
-// Plays the directions clip from MP3 bytes (a blob: URL, revoked on unmount). Owner: frontend (P0-11).
-// Fallback when there's no clip: speechSynthesis reading the directions text (ADR 0007).
+// Plays the directions clip from AAC bytes (a blob: URL with audio/aac, revoked on unmount). Owner: frontend (P0-11).
+// Fallback when there's no clip: speechSynthesis reading the directions text (ADR 0007, ADR 0009).
 import { useEffect, useRef, useState } from "react";
 
 export interface AudioPlayerProps {
-  mp3Base64?: string;
-  mp3Bytes?: Uint8Array;
+  audioBytes?: Uint8Array | null;
   fallbackText?: string;
   lang: string;
   label?: string;
@@ -17,18 +16,8 @@ const BCP47_MAP: Record<string, string> = {
   en: "en-IN",
 };
 
-function decodeBase64(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
 export default function AudioPlayer({
-  mp3Base64,
-  mp3Bytes,
+  audioBytes,
   fallbackText,
   lang,
   label = "Play",
@@ -43,21 +32,10 @@ export default function AudioPlayer({
       blobUrlRef.current = null;
     }
 
-    let bytes: Uint8Array | null = null;
-    if (mp3Bytes && mp3Bytes.byteLength > 0) {
-      bytes = mp3Bytes;
-    } else if (mp3Base64 && mp3Base64.length > 0) {
-      try {
-        bytes = decodeBase64(mp3Base64);
-      } catch {
-        bytes = null;
-      }
-    }
-
-    if (bytes && bytes.byteLength > 64) {
-      const copy = new Uint8Array(bytes.byteLength);
-      copy.set(bytes);
-      const blob = new Blob([copy.buffer], { type: "audio/mpeg" });
+    if (audioBytes && audioBytes.byteLength > 64) {
+      const copy = new Uint8Array(audioBytes.byteLength);
+      copy.set(audioBytes);
+      const blob = new Blob([copy.buffer], { type: "audio/aac" });
       blobUrlRef.current = URL.createObjectURL(blob);
     }
 
@@ -74,7 +52,7 @@ export default function AudioPlayer({
         window.speechSynthesis.cancel();
       }
     };
-  }, [mp3Base64, mp3Bytes]);
+  }, [audioBytes]);
 
   const speakFallback = () => {
     if (
@@ -124,7 +102,7 @@ export default function AudioPlayer({
     speakFallback();
   };
 
-  const disabled = !mp3Base64 && !mp3Bytes && !fallbackText;
+  const disabled = (!audioBytes || audioBytes.byteLength === 0) && !fallbackText;
 
   return (
     <button
