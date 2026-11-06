@@ -7,7 +7,8 @@
 //    If locality is null, ask for the area and PIN code.
 // 3. → flows.findCandidatePins(...). PinPicker shows up to 3 candidates on MapView (or manual drop).
 // 4. Confirm → show the DIGIPIN with formatDigipin.
-// 5. → flows.makeDirections(...): show the three directions texts with play buttons (AudioPlayer).
+// 5. → flows.makeDirections(...): show the three directions texts with play buttons (AudioPlayer reads
+//    the text with the phone's speechSynthesis; setup makes no clips, ADR 0010).
 // 6. Name: suggestHouseholdLabel() as a default, an input for her own with the rule from
 //    isValidHouseholdLabel (ADR 0006) and a warning that names are public; check availability with householdLabelStatus.
 // 7. → flows.createHousehold(...) with a progress list ("Reserving your name…", "Saving your home, locked…").
@@ -88,9 +89,6 @@ export default function SetupPage() {
   const [directionsLoading, setDirectionsLoading] = useState(false);
   const [directionsError, setDirectionsError] = useState<string | null>(null);
   const [directions, setDirections] = useState<DirectionsText | null>(null);
-  const [voiceClips, setVoiceClips] = useState<
-    Partial<Record<Language, Uint8Array>>
-  >({});
 
   // Step 6: Household Name
   const [suggestedLabel, setSuggestedLabel] = useState("");
@@ -247,10 +245,9 @@ export default function SetupPage() {
         landmarksArg,
       );
       setDirections(res.directions);
-      setVoiceClips(res.clips);
     } catch {
       setDirectionsError(
-        "Could not prepare spoken directions right now. Please tap Retry.",
+        "Could not write the directions right now. Please tap Retry.",
       );
     } finally {
       setDirectionsLoading(false);
@@ -322,7 +319,6 @@ export default function SetupPage() {
           roomNumber: roomNumber.trim(),
           writtenAddress: wayToTheDoor,
           directions,
-          voiceClips,
           candidates,
         },
         (step) => {
@@ -745,7 +741,7 @@ export default function SetupPage() {
             {directionsLoading && (
               <div className="mt-3 flex items-center gap-3 rounded-xl bg-[#FAF5EC] p-4 text-sm text-[#1F1C18]">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#B8862D] border-t-transparent" />
-                <span>Generating Hindi, Marathi, and English voice guides…</span>
+                <span>Writing directions in Hindi, Marathi and English…</span>
               </div>
             )}
 
@@ -776,7 +772,6 @@ export default function SetupPage() {
                     <AudioPlayer
                       lang={lang.code}
                       label={`${lang.sub} directions`}
-                      audioBytes={voiceClips[lang.code]}
                       fallbackText={directions[lang.code]}
                     />
                     <div className="min-w-0 flex-1">

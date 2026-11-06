@@ -130,6 +130,26 @@ it("reads the requested clip, seals the batch, mints its derived owner and retur
   expect(io.format.mock.calls.at(-1)![1].sessionKey.every((value: number) => value === 0)).toBe(true);
 });
 
+it("approves a home with no voice records without a clip read or grant-audio write (ADR 0010)", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const homeBytes = await sealJson(keys.sealKey, { ...home, voiceKeys: {} });
+  const answer = io.request.getMockImplementation()!;
+  io.request.mockImplementation(async (call) => {
+    const row = await answer(call);
+    const sealed = { ...row.attributes[1], value: `0x${Buffer.from(homeBytes).toString("hex")}` };
+    return { ...row, attributes: [row.attributes[0], sealed] };
+  });
+  const result = await approveGrant(keys, household, request);
+  expect(result.courierLink).toBe("https://pata.test/c#test-3333");
+  expect(io.request.mock.calls.map(([item]) => item.params[0])).toEqual([homeKey]);
+  expect(io.createEntity).not.toHaveBeenCalled();
+  const identity = await deriveGrantIdentity(io.link!.sessionKey);
+  const { creates } = io.executeBatch.mock.calls[0][0];
+  const payload = await openJson(identity.sealKey, hexToBytes(creates[0].values.payload.value));
+  expect(payload).toMatchObject({ directions: "Test door directions", grantEnd: result.grantEnd });
+  expect(payload).not.toHaveProperty("audioKey");
+});
+
 it("rebuilds payload/index/history and the link together when an expiry retry changes the deadline", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   const errorAbi = parseAbi(["error CannotSetPastExpiry(uint64 expiry)"]);

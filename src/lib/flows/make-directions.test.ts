@@ -1,8 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { makeDirections } from "./setup-household";
 import { testHouseholdKeys } from "../server-client/test-helpers";
-import { recordingFixture } from "../server-client/recording-fixtures";
-import { MAX_VOICE_CLIP_BYTES } from "../../../shared/constants";
 
 const directions = { hi: "नीला दरवाज़ा।", mr: "निळा दरवाजा.", en: "Blue gate." };
 const pin = { lat: 19.04, lon: 72.85 };
@@ -11,112 +9,22 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it("returns three raw language clips and directions without Arkiv or RPC calls", async () => {
+it("returns the three directions texts with one call and no speech, Arkiv or RPC calls (ADR 0010)", async () => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
-  const audio = await recordingFixture("tts-silence-8000.aac");
   const network = vi.fn<typeof fetch>(async (url) => {
     if (String(url) === "https://worker.test/address/directions") return Response.json({ directions });
-    if (String(url) === "https://worker.test/speech/out")
-      return new Response(audio, { headers: { "content-type": "audio/aac" } });
     throw new Error("Unexpected external call");
   });
   vi.stubGlobal("fetch", network);
-  const result = await makeDirections(await testHouseholdKeys(), "near temple, blue gate", pin, []);
-  expect(result).toEqual({
-    directions,
-    clips: {
-      hi: new Uint8Array(audio),
-      mr: new Uint8Array(audio),
-      en: new Uint8Array(audio),
+  await expect(makeDirections(await testHouseholdKeys(), "near temple, blue gate", pin, [])).resolves.toEqual(
+    {
+      directions,
     },
-  });
-  expect(network).toHaveBeenCalledTimes(4);
-});
-
-it("keeps text and other clips when one language's speech provider fails", async () => {
-  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
-  const audio = await recordingFixture("tts-silence-8000.aac");
-  vi.stubGlobal(
-    "fetch",
-    vi.fn<typeof fetch>(async (url, init) => {
-      if (String(url).endsWith("/address/directions")) return Response.json({ directions });
-      if (JSON.parse(String(init?.body)).language === "hi") return new Response(null, { status: 502 });
-      return new Response(audio, { headers: { "content-type": "audio/aac" } });
-    }),
   );
-  await expect(makeDirections(await testHouseholdKeys(), "near temple", pin, [])).resolves.toEqual({
-    directions,
-    clips: { mr: new Uint8Array(audio), en: new Uint8Array(audio) },
-  });
+  expect(network).toHaveBeenCalledTimes(1);
 });
 
-it("shortens only an oversized language once and returns text matching the retry audio", async () => {
-  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
-  const audio = await recordingFixture("tts-silence-8000.aac");
-  const boundary = new Uint8Array(MAX_VOICE_CLIP_BYTES + 1); // one byte over the grant budget: must retry.
-  boundary.set(new Uint8Array(audio));
-  const largestFit = new Uint8Array(MAX_VOICE_CLIP_BYTES);
-  largestFit.set(new Uint8Array(audio));
-  const hiTexts: string[] = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn<typeof fetch>(async (url, init) => {
-      if (String(url).endsWith("/address/directions")) return Response.json({ directions });
-      const input = JSON.parse(String(init?.body));
-      if (input.language === "hi") hiTexts.push(input.text);
-      const bytes = input.language === "hi" && hiTexts.length === 1 ? boundary : largestFit;
-      return new Response(bytes, { headers: { "content-type": "audio/aac" } });
-    }),
-  );
-  const keys = await testHouseholdKeys();
-  const result = await makeDirections(keys, "near temple", pin, []);
-  expect(hiTexts).toHaveLength(2);
-  expect(hiTexts[1].length).toBeLessThan(hiTexts[0].length);
-  expect(result.directions).toEqual({ ...directions, hi: hiTexts[1] });
-  expect(result.clips.hi).toEqual(largestFit);
-});
-
-it.each([false, true])("omits a clip after an oversized or failed retry (failure=%s)", async (failRetry) => {
-  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
-  const audio = await recordingFixture("tts-silence-8000.aac");
-  const oversized = new Uint8Array(MAX_VOICE_CLIP_BYTES + 1);
-  oversized.set(new Uint8Array(audio));
-  let hiCalls = 0;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn<typeof fetch>(async (url, init) => {
-      if (String(url).endsWith("/address/directions")) return Response.json({ directions });
-      if (JSON.parse(String(init?.body)).language === "hi") {
-        hiCalls++;
-        if (failRetry && hiCalls === 2) return new Response(null, { status: 502 });
-        return new Response(oversized, { headers: { "content-type": "audio/aac" } });
-      }
-      return new Response(audio, { headers: { "content-type": "audio/aac" } });
-    }),
-  );
-  await expect(makeDirections(await testHouseholdKeys(), "near temple", pin, [])).resolves.toEqual({
-    directions,
-    clips: { mr: new Uint8Array(audio), en: new Uint8Array(audio) },
-  });
-  expect(hiCalls).toBe(2);
-});
-
-it("retains all directions when every synthesis call fails without retrying provider errors", async () => {
-  vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
-  const network = vi.fn<typeof fetch>(async (url) =>
-    String(url).endsWith("/address/directions")
-      ? Response.json({ directions })
-      : new Response(null, { status: 502 }),
-  );
-  vi.stubGlobal("fetch", network);
-  await expect(makeDirections(await testHouseholdKeys(), "near temple", pin, [])).resolves.toEqual({
-    directions,
-    clips: {},
-  });
-  expect(network).toHaveBeenCalledTimes(4);
-});
-
-it("stops before speech when the directions request fails", async () => {
+it("throws when the directions request fails", async () => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   const network = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 502 }));
   vi.stubGlobal("fetch", network);
@@ -126,11 +34,7 @@ it("stops before speech when the directions request fails", async () => {
 
 it("sends code-computed landmark distances from the confirmed pin", async () => {
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
-  const network = vi.fn<typeof fetch>(async (url) =>
-    String(url).endsWith("/address/directions")
-      ? Response.json({ directions })
-      : new Response(null, { status: 502 }),
-  );
+  const network = vi.fn<typeof fetch>(async () => Response.json({ directions }));
   vi.stubGlobal("fetch", network);
   await makeDirections(await testHouseholdKeys(), "near temple", pin, [
     {

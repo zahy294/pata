@@ -27,9 +27,7 @@ import {
   rankLandmarks,
   speechToText,
   writeDirections,
-  textToSpeech,
 } from "../server-client";
-import { shortenDirections } from "../server-client/directions-text";
 import { RecordingInputError } from "../server-client/recording";
 import { ServerError } from "../server-client/signed";
 import { ensureArkivGas } from "./arkiv-gas";
@@ -128,13 +126,16 @@ export async function findCandidatePins(
   return rankLandmarks(keys, { wayToTheDoor, locality, landmarkPhrases });
 }
 
-/** Step 5: raw clips for createHousehold to encrypt/persist after funding; no Arkiv writes here. */
+/**
+ * Step 5: the directions text in each language. No speech synthesis (ADR 0010): the phone's own
+ * speechSynthesis reads the text, so setup makes no voice records and approval no grant audio.
+ */
 export async function makeDirections(
   keys: HouseholdKeys,
   wayToTheDoor: string,
   confirmedPin: LatLon,
   landmarks: { feature: OsmFeature; relation: Relation }[],
-): Promise<{ directions: DirectionsText; clips: Partial<Record<Language, Uint8Array>> }> {
+): Promise<{ directions: DirectionsText }> {
   const { directions } = await writeDirections(keys, {
     wayToTheDoor,
     pin: confirmedPin,
@@ -144,29 +145,7 @@ export async function makeDirections(
       metres: distanceMetres(confirmedPin, feature.point),
     })),
   });
-  const clips: Partial<Record<Language, Uint8Array>> = {};
-  for (const language of LANGUAGES) {
-    try {
-      let text = directions[language];
-      let clip = await textToSpeech(keys, text, language);
-      // A grant payload carries one clip as base64 beside the address, so clips stay within
-      // MAX_VOICE_CLIP_BYTES. createHousehold owns encryption and persistence after funding.
-      if (clip.byteLength > MAX_VOICE_CLIP_BYTES) {
-        const characters = Array.from(text).length;
-        // Shorten in proportion to the overshoot, with 10% headroom, and synthesize once more.
-        const target = Math.floor((characters * MAX_VOICE_CLIP_BYTES * 0.9) / clip.byteLength);
-        text = shortenDirections(text, Math.max(1, Math.min(target, characters - 1)));
-        clip = await textToSpeech(keys, text, language);
-      }
-      if (clip.byteLength <= MAX_VOICE_CLIP_BYTES) {
-        directions[language] = text;
-        clips[language] = clip;
-      }
-    } catch {
-      // ADR 0007: retain directions for browser speech fallback.
-    }
-  }
-  return { directions, clips };
+  return { directions };
 }
 
 export interface NewHousehold {
@@ -177,8 +156,11 @@ export interface NewHousehold {
   roomNumber: string;
   writtenAddress: string;
   directions: DirectionsText;
-  /** From makeDirections. A missing language keeps its text for speechSynthesis (ADR 0007). */
-  voiceClips: Partial<Record<Language, Uint8Array>>;
+  /**
+   * Setup no longer makes clips (ADR 0010), so the screen leaves this out. Any clips given are still
+   * stored as voice records (ADR 0009); without them, speechSynthesis reads the text (ADR 0007).
+   */
+  voiceClips?: Partial<Record<Language, Uint8Array>>;
   candidates: CandidatePin[];
 }
 

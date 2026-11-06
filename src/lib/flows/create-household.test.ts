@@ -332,6 +332,20 @@ it("funds Arkiv before creating all three voice records and puts their keys in t
   });
 });
 
+it("saves the home with no voice records when setup made no clips (ADR 0010)", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  io.createEntity.mockImplementation(async () => ({ entityKey }));
+  expect((await createHousehold(keys, { ...input, voiceClips: undefined })).homeRecordKey).toBe(entityKey);
+  expect(io.createEntity.mock.calls.map(([schema]) => schema.name)).toEqual(["pata.home.v1"]);
+  const [, values] = io.createEntity.mock.calls[0];
+  const home = await openJson<{ voiceKeys: object; directions: object }>(
+    keys.sealKey,
+    hexToBytes(values.sealed.value),
+  );
+  expect(home.voiceKeys).toEqual({});
+  expect(home.directions).toEqual(input.directions);
+});
+
 it("finishes setup when speech failed for one language, keeping its text for speechSynthesis", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   const voiceClips = { hi: new Uint8Array([73, 68, 51, 1]), en: new Uint8Array([73, 68, 51, 3]) };
