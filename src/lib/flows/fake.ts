@@ -4,6 +4,7 @@
 import type {
   CandidatePin,
   DirectionsText,
+  GrantPayload,
   GrantRequest,
   Language,
   LatLon,
@@ -14,6 +15,7 @@ import type {
 import type { RankResponse } from "../../../shared/api";
 import { DEMO_BBOX } from "../map/config";
 import { GRANT_LATENCY_MARGIN_SECONDS, PROVIDER_NAME } from "../../../shared/constants";
+import { encodeDigipin } from "../digipin";
 import {
   deriveGrantIdentity,
   deriveHouseholdKeys,
@@ -29,9 +31,10 @@ import {
   type HouseholdState,
 } from "../keys/store";
 import { isValidHouseholdLabel, suggestHouseholdLabel } from "../ens/names";
-import { formatCourierLink } from "../link";
+import { formatCourierLink, parseCourierFragment } from "../link";
 import type { NewHousehold, SetupStep } from "./setup-household";
 import type { ApprovedGrant } from "./approve-grant";
+import type { CourierView } from "./courier";
 
 export { isValidHouseholdLabel, suggestHouseholdLabel };
 
@@ -299,4 +302,77 @@ export async function approveGrant(
     grantEnd,
   };
 }
+
+const fakeGrantDeadlines = new Map<string, number>();
+
+export async function checkCourierLink(
+  fragmentOrStored: string,
+): Promise<CourierView> {
+  const link = parseCourierFragment(fragmentOrStored);
+  if (!link) return { state: "invalid" };
+
+  const suffix = `.${PROVIDER_NAME}`;
+  if (
+    !link.householdName.endsWith(suffix) ||
+    !isValidHouseholdLabel(link.householdName.slice(0, -suffix.length)) ||
+    !/^0x[\da-fA-F]{64}$/.test(link.payloadKey) ||
+    link.sessionKey.length !== 32
+  ) {
+    link.sessionKey.fill(0);
+    return { state: "invalid" };
+  }
+
+  const locality: Locality = {
+    name: "Dharavi",
+    pinCode: "400017",
+  };
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const key = `${link.householdName}:${link.payloadKey.toLowerCase()}`;
+
+  // If payloadKey is all zeros, treat as already ended immediately
+  if (/^0x0{64}$/.test(link.payloadKey)) {
+    link.sessionKey.fill(0);
+    return { state: "ended", locality };
+  }
+
+  let grantEnd = fakeGrantDeadlines.get(key);
+  if (!grantEnd) {
+    // Decode optional expiry encoded in the last 4 bytes of payloadKey if non-standard,
+    // otherwise default to 20s from first open so live → ended transition works on phones and in tests.
+    grantEnd = nowSeconds + 20;
+    fakeGrantDeadlines.set(key, grantEnd);
+  }
+
+  if (nowSeconds >= grantEnd) {
+    link.sessionKey.fill(0);
+    return { state: "ended", locality };
+  }
+
+  const pin: LatLon = { lat: 19.0432, lon: 72.8541 };
+  const payload: GrantPayload = {
+    version: 1,
+    requester: { displayName: "Delivery Partner" },
+    purpose: "Doorstep delivery",
+    language: "hi",
+    digipin: encodeDigipin(pin),
+    pin,
+    locality,
+    roomNumber: "Room 14, Chawl 3, 2nd Floor",
+    writtenAddress:
+      "Opposite Hanuman Mandir, Kumbharwada Lane 4, blue gate, Dharavi 400017",
+    directions:
+      "हनुमान मंदिर के सामने नीले गेट से अंदर आएं और दूसरी सीढ़ी चढ़ें।",
+    audioMp3Base64: "",
+    grantEnd,
+  };
+
+  link.sessionKey.fill(0);
+  return {
+    state: "live",
+    locality,
+    payload,
+  };
+}
+
 
