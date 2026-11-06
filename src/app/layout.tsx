@@ -1,18 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Pata",
   description: "Your door, shared only by consent.",
+  icons: { icon: { url: "/pata-mark.svg", type: "image/svg+xml" } },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#1A1816] text-[#1F1C18] antialiased selection:bg-[#046A38]/20">
@@ -20,11 +18,11 @@ export default function RootLayout({
           <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#E6DAC6] bg-[#FAF5EC]/95 px-5 backdrop-blur-sm">
             <Link
               href="/"
-              className="flex items-baseline gap-2 focus:outline-none"
+              aria-label="Pata home"
+              className="flex items-center gap-2.5 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#046A38]"
             >
-              <span className="font-serif text-2xl font-bold tracking-tight text-[#1F1C18]">
-                Pata<span className="text-[#B8862D]">.</span>
-              </span>
+              <Image src="/pata-mark.svg" alt="" width={32} height={40} priority />
+              <span className="font-serif text-3xl font-bold tracking-tight text-[#1F1C18]">Pata</span>
               <span className="rounded-md bg-[#EFE5D4] px-2 py-0.5 text-xs font-medium text-[#5C5346]">
                 पता
               </span>
