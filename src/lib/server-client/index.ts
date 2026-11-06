@@ -28,6 +28,7 @@ import {
 import { postAddress } from "./address-call";
 import { postRecording } from "./speech-call";
 import { signedPost } from "./signed";
+import { postDirections, postMp3 } from "./directions-call";
 export { ServerError } from "./signed";
 
 export async function topup(keys: HouseholdKeys, req: TopupRequest): Promise<TopupResponse> {
@@ -60,9 +61,7 @@ export async function writeDirections(
   keys: HouseholdKeys,
   req: DirectionsRequest,
 ): Promise<DirectionsResponse> {
-  void keys;
-  void req;
-  throw new Error("writeDirections: not implemented (P0-9)");
+  return postDirections(keys, req);
 }
 
 export async function speechToText(keys: HouseholdKeys, audio: Blob, language: Language): Promise<string> {
@@ -74,8 +73,5 @@ export async function textToSpeech(
   text: string,
   language: Language,
 ): Promise<Uint8Array> {
-  void keys;
-  void text;
-  void language;
-  throw new Error("textToSpeech: not implemented (P0-9)");
+  return postMp3(keys, text, language);
 }
