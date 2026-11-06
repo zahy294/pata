@@ -30,7 +30,7 @@ import {
   textToSpeech,
 } from "../server-client";
 import { shortenDirections } from "../server-client/directions-text";
-import { deployHouseholdContracts } from "../ens/household";
+import { deployHouseholdContracts, householdLabelStatus } from "../ens/household";
 import { dnsEncode, isValidHouseholdLabel } from "../ens/names";
 import { universalHelperAbi } from "../ens/abis";
 import { sepoliaPublicClient, arkivPublicClient } from "../rpc";
@@ -39,7 +39,13 @@ import { canonicalJson } from "../arkiv/reuse";
 import { encodeDigipin } from "../digipin";
 import { saveHouseholdState, loadSetupCheckpoint, saveSetupCheckpoint } from "../keys/store";
 import { sealJson, openJson } from "../seal";
-import { ENS, PROVIDER_NAME, RECORD_KEYS, ARKIV_MAX_BYTES } from "../../../shared/constants";
+import {
+  ENS,
+  PROVIDER_NAME,
+  RECORD_KEYS,
+  ARKIV_MAX_BYTES,
+  MAX_VOICE_CLIP_BYTES,
+} from "../../../shared/constants";
 
 /** P0: load the device root or make a new one; P1-3: passkey. */
 export async function signIn(): Promise<HouseholdKeys> {
@@ -51,6 +57,15 @@ export async function signIn(): Promise<HouseholdKeys> {
     }
     return deriveHouseholdKeys(root);
   });
+}
+
+/** Step 1: a default name (never derived from the address; names are public, ADR 0006). */
+export { suggestHouseholdLabel } from "../ens/names";
+
+/** Step 1: whether a household label can be registered in pata.eth. Reserved counts as taken. */
+export async function checkHouseholdName(label: string): Promise<"available" | "taken" | "invalid"> {
+  if (!isValidHouseholdLabel(label)) return "invalid";
+  return (await householdLabelStatus(label)) === 0 ? "available" : "taken";
 }
 
 /** Step 2: spoken (Blob) or typed (string) way to the door → transcript, locality, landmark phrases. */
@@ -95,13 +110,16 @@ export async function makeDirections(
     try {
       let text = directions[language];
       let clip = await textToSpeech(keys, text, language);
-      // sealBytes v1: one version byte, 12-byte IV and 16-byte AES-GCM tag.
-      // createHousehold owns encryption and persistence after funding.
-      if (clip.byteLength + 29 >= ARKIV_MAX_BYTES) {
-        text = shortenDirections(text, Math.max(1, Math.floor(Array.from(text).length / 2)));
+      // A grant payload carries one clip as base64 beside the address, so clips stay within
+      // MAX_VOICE_CLIP_BYTES. createHousehold owns encryption and persistence after funding.
+      if (clip.byteLength > MAX_VOICE_CLIP_BYTES) {
+        const characters = Array.from(text).length;
+        // Shorten in proportion to the overshoot, with 10% headroom, and synthesize once more.
+        const target = Math.floor((characters * MAX_VOICE_CLIP_BYTES * 0.9) / clip.byteLength);
+        text = shortenDirections(text, Math.max(1, Math.min(target, characters - 1)));
         clip = await textToSpeech(keys, text, language);
       }
-      if (clip.byteLength + 29 < ARKIV_MAX_BYTES) {
+      if (clip.byteLength <= MAX_VOICE_CLIP_BYTES) {
         directions[language] = text;
         clips[language] = clip;
       }
@@ -120,7 +138,8 @@ export interface NewHousehold {
   roomNumber: string;
   writtenAddress: string;
   directions: DirectionsText;
-  voiceClips: Record<Language, Uint8Array>;
+  /** From makeDirections. A missing language keeps its text for speechSynthesis (ADR 0007). */
+  voiceClips: Partial<Record<Language, Uint8Array>>;
   candidates: CandidatePin[];
 }
 
@@ -199,11 +218,11 @@ export async function createHousehold(
     )
       throw new Error("Invalid household details");
     const name = `${input.label}.${PROVIDER_NAME}`;
-    for (const language of LANGUAGES) {
-      if (
-        !(input.voiceClips?.[language] instanceof Uint8Array) ||
-        input.voiceClips[language].byteLength + 29 > ARKIV_MAX_BYTES
-      )
+    const voiceClips = input.voiceClips ?? {};
+    const clipLanguages = LANGUAGES.filter((language) => voiceClips[language] !== undefined);
+    for (const language of clipLanguages) {
+      const clip = voiceClips[language];
+      if (!(clip instanceof Uint8Array) || clip.byteLength === 0 || clip.byteLength > MAX_VOICE_CLIP_BYTES)
         throw new Error("Invalid or oversized voice clip");
     }
     const homeDraft: Omit<HomeRecord, "voiceKeys"> = {
@@ -222,11 +241,9 @@ export async function createHousehold(
       throw new Error("Home record is too large");
     const sealedInput = {
       ...homeDraft,
-      voiceClips: {
-        hi: toHex(input.voiceClips.hi),
-        mr: toHex(input.voiceClips.mr),
-        en: toHex(input.voiceClips.en),
-      },
+      voiceClips: Object.fromEntries(
+        clipLanguages.map((language) => [language, toHex(voiceClips[language]!)]),
+      ),
     };
     const checkpoint: SetupCheckpoint = (await loadSetupCheckpoint(keys.address)) ?? {
       name,
@@ -316,22 +333,20 @@ export async function createHousehold(
       checkpoint.resolved = true;
       await save();
     }
-    if (LANGUAGES.some((language) => !checkpoint.voiceKeys?.[language])) {
+    if (clipLanguages.some((language) => !checkpoint.voiceKeys?.[language])) {
       onProgress("voice-records");
       checkpoint.voiceKeys ??= {};
-      for (const language of LANGUAGES) {
+      for (const language of clipLanguages) {
         if (checkpoint.voiceKeys[language]) continue;
-        checkpoint.voiceKeys[language] = await createVoiceRecord(keys, language, input.voiceClips[language]);
+        checkpoint.voiceKeys[language] = await createVoiceRecord(keys, language, voiceClips[language]!);
         await save();
       }
     }
     const home: HomeRecord = {
       ...homeDraft,
-      voiceKeys: {
-        hi: checkpoint.voiceKeys!.hi!,
-        mr: checkpoint.voiceKeys!.mr!,
-        en: checkpoint.voiceKeys!.en!,
-      },
+      voiceKeys: Object.fromEntries(
+        clipLanguages.map((language) => [language, checkpoint.voiceKeys![language]!]),
+      ),
     };
     if (!checkpoint.homeRecordKey) {
       onProgress("home-record");

@@ -16,7 +16,10 @@ export async function lookupLocality(householdName: string): Promise<Locality | 
         client.getEnsText({ name: householdName, key, universalResolverAddress: ENS.universalResolver }),
       ),
     );
-    return name && pinCode ? { name, pinCode } : null;
+    if (!name || !pinCode) return null;
+    // Household setup writes "Dharavi, 400017" (household.ts localityCalls); return the name alone.
+    const suffix = `, ${pinCode}`;
+    return { name: name.endsWith(suffix) ? name.slice(0, -suffix.length) : name, pinCode };
   } catch {
     throw new Error("Could not read locality");
   }

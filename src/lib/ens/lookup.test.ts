@@ -28,6 +28,10 @@ it("reads both public locality text records through the universal resolver", asy
   expect(await lookupLocality("home.pata.eth")).toEqual({ name: "Dharavi", pinCode: "400017" });
   expect(io.getEnsText.mock.calls.map(([arg]) => arg.key)).toEqual(["location", "eth.pata.pincode"]);
 });
+it("strips the pin code that household setup appends to the location record", async () => {
+  io.getEnsText.mockImplementation(async ({ key }) => (key === "location" ? "Dharavi, 400017" : "400017"));
+  expect(await lookupLocality("home.pata.eth")).toEqual({ name: "Dharavi", pinCode: "400017" });
+});
 it("finds exact household ownership using the full DNS name", async () => {
   io.readContract.mockResolvedValue(owner);
   expect(await householdOwner("home.pata.eth")).toBe(owner);

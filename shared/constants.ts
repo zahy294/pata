@@ -70,6 +70,11 @@ export const ARKIV_MAX_DAYS = 182;
 export const ARKIV_EXTEND_BELOW_DAYS = 90;
 /** All bytes values of one create share one 128 KiB budget. */
 export const ARKIV_MAX_BYTES = 128 * 1024;
+/**
+ * Largest raw MP3 directions clip (P0-9). A grant payload carries the clip as base64 (4/3 larger) next to
+ * the address text, and payload plus index share ARKIV_MAX_BYTES, so 80 KiB leaves about 21 KiB for the rest.
+ */
+export const MAX_VOICE_CLIP_BYTES = 80 * 1024;
 
 // ---- Anon-RPC (anon-rpc.md) ----
 
