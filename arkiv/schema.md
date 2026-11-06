@@ -19,4 +19,10 @@ The grant's two columns share one 128 KiB budget. Its household-sealed `index` c
 
 P0-8 live smoke-test writer (2026-11-06, throwaway rather than demo): `0xd9b8a786d6D662b3e0fB3F12D5d0688fE5876175`, verified home and voice round trips. Public entity keys and receipts are in `docs/plans/P0-8-arkiv.md` and `docs/plans/P0-3.md`. The throwaway key was not persisted.
 
-**A query judges can run:** filled in after P0-10.
+**P0-10 smoke writer:** `0x45A1cc35d3Cf6eCCae5B359B23923b35a0A55967`. Its grant payload was short-lived; its readonly household-sealed history lives 182 days. Public keys and transaction receipts are in `docs/plans/P0-3.md`; this disposable key is not the demo household.
+
+**A query judges can run:** POST the following JSON-RPC body to `https://rpc.rabdi.db-chain.testnet.arkiv.network`. It selects public history metadata, without needing a decryption key:
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"arkiv_query","params":["arkiv.schema = str('pata.history.v1') AND $owner = addr(0x45A1cc35d3Cf6eCCae5B359B23923b35a0A55967)",{"select":{"key":true,"expiresAt":true,"creationFlags":true,"count":true}}]}
+```

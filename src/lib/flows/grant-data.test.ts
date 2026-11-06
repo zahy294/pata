@@ -51,3 +51,8 @@ it("builds only the requested language's payload and base64 audio, without voice
     grantEnd: 1_800_000_050,
   });
 });
+
+it("handles a large clip without a spread-stack failure and exposes base64's real size", () => {
+  const payload = buildGrantPayload(home, request, new Uint8Array(100 * 1024), 1_800_000_050);
+  expect(payload.audioMp3Base64).toHaveLength(136_536);
+});

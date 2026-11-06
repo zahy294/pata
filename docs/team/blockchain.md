@@ -14,6 +14,8 @@ You're on the critical path: the first household name on Sepolia is due at **hou
 - [x] P0-8 Arkiv live home/voice round-trip: real Rabdi create/read, owner/expiry/ciphertext checks and decoded 183-day rejection passed. See `docs/plans/P0-8-arkiv.md` for receipts and evidence.
 - [x] P0-8 setup flow: persistent signIn, recoverable relay/proxy/record retries, encrypted checkpoints, funded per-language voiceClips uploads and owner/locality verification. See `docs/plans/P0-8.md` for the updated caller interface.
 - [ ] P0-8 first household through `/setup`: DIGIPIN and signed relay clients/routes integrated; frontend setup and AI/ML directions/voice inputs remain pending. Combined integration checks and build pass; see `docs/plans/P0-8.md`.
+- [x] P0-10 blockchain grant flow: chain-time expiry, encrypted payload/index/history batch, role-free mint with coordinated one-time expiry refresh and approval orchestration. Live batch, permissions, revoke and expiry assertions verified; see `docs/plans/P0-10.md` and P0-3 for observation limits.
+- [ ] P0-10 consent-screen link: frontend formatter and consent/share/QR integration pending, as agreed with the user.
 - [ ] P0-3 follow-up: repeat with an Arkiv access key on the OnePlus 11 preview; five funded Nox write measurements per chain (deferred by the user until device, preview and funds are ready).
 
 For testing on Sepolia and Rabdi you need your own development wallet (SETUP.md §3), funded from the faucets. Its key goes in your `.env.local` only; Codex must never read or print it. Household keys come from the app itself.
