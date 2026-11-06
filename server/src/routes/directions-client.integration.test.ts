@@ -17,7 +17,7 @@ it("generates raw clips through real signing, guard and spend accounting with pr
   vi.stubEnv("NEXT_PUBLIC_SERVER_URL", "https://worker.test");
   const env = testEnv();
   env.ANTHROPIC_API_KEY = "test-key";
-  const audio = await recordingFixture("tts-silence-16000.mp3");
+  const audio = await recordingFixture("tts-silence-8000.aac");
   const directions = { hi: "नीला दरवाज़ा।", mr: "निळा दरवाजा.", en: "Blue gate." };
   const providers: string[] = [];
   vi.stubGlobal(

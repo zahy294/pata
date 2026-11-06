@@ -3,7 +3,7 @@ import { calculateGrantEnd, buildGrantPayload } from "./grant-data";
 import type { HomeRecord, GrantRequest } from "../../../shared/domain";
 import { ARKIV_MAX_BYTES, MAX_VOICE_CLIP_BYTES } from "../../../shared/constants";
 import { deriveHouseholdKeys } from "../keys";
-import { sealJson } from "../seal";
+import { sealBytes } from "../seal";
 
 const key = `0x${"12".repeat(32)}` as const;
 const home: HomeRecord = {
@@ -38,8 +38,10 @@ it("rejects a duration beyond the supported Arkiv lifetime before approval can s
   expect(() => calculateGrantEnd(1_800_000_000, 183 * 86_400)).toThrow("Invalid grant duration");
 });
 
-it("builds only the requested language's payload and base64 audio, without voice entity keys", () => {
-  expect(buildGrantPayload(home, request, new Uint8Array([0, 1, 2, 255]), 1_800_000_050)).toEqual({
+const audioKey = `0x${"77".repeat(32)}` as const;
+
+it("builds only the requested language's payload with its audio entity key, without voice entity keys", () => {
+  expect(buildGrantPayload(home, request, audioKey, 1_800_000_050)).toEqual({
     version: 1,
     requester: request.requester,
     purpose: "Delivery",
@@ -50,44 +52,18 @@ it("builds only the requested language's payload and base64 audio, without voice
     roomNumber: "Room 731",
     writtenAddress: "Private test address",
     directions: "Take the test door",
-    audioMp3Base64: "AAEC/w==",
+    audioKey,
     grantEnd: 1_800_000_050,
   });
 });
 
-it("handles a large clip without a spread-stack failure and exposes base64's real size", () => {
-  const payload = buildGrantPayload(home, request, new Uint8Array(100 * 1024), 1_800_000_050);
-  expect(payload.audioMp3Base64).toHaveLength(136_536);
-});
-
 it("builds a text-only payload when setup kept no clip for the language (ADR 0007)", () => {
   const payload = buildGrantPayload(home, request, null, 1_800_000_050);
-  expect(payload).not.toHaveProperty("audioMp3Base64");
+  expect(payload).not.toHaveProperty("audioKey");
   expect(payload.directions).toBe("Take the test door");
 });
 
-it("fits the largest allowed clip with 300-character Devanagari directions in one grant batch", async () => {
+it("seals the largest allowed clip within one entity's bytes budget", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
-  const directions = "द".repeat(300);
-  const longHome = {
-    ...home,
-    writtenAddress: "Room 12, Building 4, ".repeat(25),
-    directions: { hi: directions, mr: directions, en: directions },
-  };
-  const longRequest = { ...request, language: "hi" as const, purpose: "Delivery ".repeat(20) };
-  const payload = buildGrantPayload(
-    longHome,
-    longRequest,
-    new Uint8Array(MAX_VOICE_CLIP_BYTES),
-    1_800_000_050,
-  );
-  const index = {
-    grantLabel: "abcdefgh",
-    requester: longRequest.requester,
-    purpose: longRequest.purpose,
-    grantEnd: 1,
-  };
-  const sealed =
-    (await sealJson(keys.sealKey, payload)).length + (await sealJson(keys.sealKey, index)).length;
-  expect(sealed).toBeLessThanOrEqual(ARKIV_MAX_BYTES);
+  expect((await sealBytes(keys.sealKey, new Uint8Array(MAX_VOICE_CLIP_BYTES))).length).toBe(ARKIV_MAX_BYTES);
 });

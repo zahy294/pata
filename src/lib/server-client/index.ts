@@ -28,7 +28,7 @@ import {
 import { postAddress } from "./address-call";
 import { postRecording } from "./speech-call";
 import { signedPost } from "./signed";
-import { postDirections, postMp3 } from "./directions-call";
+import { postDirections, postAudio } from "./directions-call";
 export { ServerError } from "./signed";
 
 export async function topup(keys: HouseholdKeys, req: TopupRequest): Promise<TopupResponse> {
@@ -73,5 +73,5 @@ export async function textToSpeech(
   text: string,
   language: Language,
 ): Promise<Uint8Array> {
-  return postMp3(keys, text, language);
+  return postAudio(keys, text, language);
 }

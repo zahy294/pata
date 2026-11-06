@@ -2,13 +2,14 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { createPublicClient } from "@arkiv-network/sdk";
 import { custom, hexToBytes, ContractFunctionRevertedError, encodeErrorResult, parseAbi } from "viem";
 import { deriveHouseholdKeys, deriveGrantIdentity } from "../keys";
-import { sealJson, sealBytes, openJson } from "../seal";
+import { sealJson, sealBytes, openJson, openBytes } from "../seal";
 import { approveGrant } from "./approve-grant";
 import type { HomeRecord, GrantRequest } from "../../../shared/domain";
 
 const io = vi.hoisted(() => ({
   request: vi.fn(),
   executeBatch: vi.fn(),
+  createEntity: vi.fn(),
   getBlock: vi.fn(),
   writeContract: vi.fn(),
   waitForTransactionReceipt: vi.fn(),
@@ -18,7 +19,7 @@ const io = vi.hoisted(() => ({
 }));
 vi.mock("../rpc", () => ({
   arkivPublicClient: () => createPublicClient({ transport: custom({ request: io.request }) }),
-  arkivWalletClient: () => ({ executeBatch: io.executeBatch }),
+  arkivWalletClient: () => ({ executeBatch: io.executeBatch, createEntity: io.createEntity }),
   sepoliaPublicClient: () => io,
   sepoliaWalletClient: () => io,
 }));
@@ -28,6 +29,7 @@ const homeKey = `0x${"11".repeat(32)}` as const;
 const voiceKey = `0x${"22".repeat(32)}` as const;
 const payloadKey = `0x${"33".repeat(32)}` as const;
 const historyKey = `0x${"44".repeat(32)}` as const;
+const audioKey = `0x${"99".repeat(32)}` as const;
 const home: HomeRecord = {
   version: 1,
   digipin: "39J49LL8T4",
@@ -84,6 +86,7 @@ beforeEach(async () => {
   });
   io.getBlock.mockResolvedValue({ timestamp: 1_800_000_000n });
   io.executeBatch.mockResolvedValue({ createdEntities: [payloadKey, historyKey] });
+  io.createEntity.mockResolvedValue({ entityKey: audioKey });
   io.writeContract.mockResolvedValue("0x01");
   io.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
   io.format.mockImplementation((origin, link) => {
@@ -112,9 +115,17 @@ it("reads the requested clip, seals the batch, mints its derived owner and retur
   expect(await openJson(identity.sealKey, hexToBytes(creates[0].values.payload.value))).toMatchObject({
     roomNumber: "Room 731",
     directions: "Test door directions",
-    audioMp3Base64: "AAEC/w==",
+    audioKey,
     grantEnd: result.grantEnd,
   });
+  // The clip is its own entity, sealed to the same session key, outliving the deadline by the retry margin.
+  const [audioSchema, audioValues, audioOptions] = io.createEntity.mock.calls[0];
+  expect(audioSchema.name).toBe("pata.grant-audio.v1");
+  expect(await openBytes(identity.sealKey, hexToBytes(audioValues.sealed.value))).toEqual(
+    new Uint8Array([0, 1, 2, 255]),
+  );
+  expect(audioOptions.expiration).toBeDefined();
+  expect(await openJson(keys.sealKey, hexToBytes(creates[0].values.index.value))).toMatchObject({ audioKey });
   expect(io.format.mock.calls.at(-1)![1].sessionKey.every((value: number) => value === 0)).toBe(true);
 });
 
@@ -143,6 +154,7 @@ it("rebuilds payload/index/history and the link together when an expiry retry ch
   expect(result.grantEnd).toBe(1_800_000_150);
   expect(io.link!.payloadKey).toBe(freshPayloadKey);
   expect(io.executeBatch).toHaveBeenCalledTimes(2);
+  expect(io.createEntity).toHaveBeenCalledTimes(1);
   const identity = await deriveGrantIdentity(io.link!.sessionKey);
   const { creates, deletes } = io.executeBatch.mock.calls[1][0];
   expect(deletes).toEqual([{ entityKey: historyKey }]);

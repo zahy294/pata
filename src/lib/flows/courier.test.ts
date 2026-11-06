@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { createPublicClient } from "@arkiv-network/sdk";
 import { custom, toHex, type Hex } from "viem";
 import { deriveHouseholdKeys, deriveGrantIdentity } from "../keys";
-import { sealJson } from "../seal";
+import { sealJson, sealBytes } from "../seal";
 import { checkCourierLink } from "./courier";
 import type { GrantPayload } from "../../../shared/domain";
 const io = vi.hoisted(() => ({
@@ -30,7 +30,6 @@ const payload: GrantPayload = {
   roomNumber: "731",
   writtenAddress: "Test door",
   directions: "Test directions",
-  audioMp3Base64: "SUQz",
   grantEnd: 2000,
 };
 function rpcRow(owner: Hex, sealed: Hex) {
@@ -72,7 +71,7 @@ beforeEach(async () => {
   io.request.mockResolvedValue(rpcRow(keys.address, toHex(await sealJson(identity.sealKey, payload))));
 });
 it("shows the door after both independent owners pass", async () => {
-  expect(await checkCourierLink("fragment")).toEqual({ state: "live", locality, payload });
+  expect(await checkCourierLink("fragment")).toEqual({ state: "live", locality, payload, audio: null });
 });
 it("ends for a missing payload or household owner mismatch before opening bytes", async () => {
   io.request.mockResolvedValueOnce(null);
@@ -103,4 +102,36 @@ it("keeps a transient failure retryable and never shows stale door data", async 
   expect(await checkCourierLink("fragment")).toEqual({ state: "checking", locality });
   expect(io.request).not.toHaveBeenCalled();
   expect((await checkCourierLink("fragment")).state).toBe("live");
+});
+it("opens the grant's audio entity once and reuses it while the page polls", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const identity = await deriveGrantIdentity(new Uint8Array(32));
+  const payloadKey: Hex = `0x${"13".repeat(32)}`;
+  const audioKey: Hex = `0x${"77".repeat(32)}`;
+  const clip = new Uint8Array([0xff, 0xf1, 0x6c, 0x40]);
+  const grantRow = {
+    ...rpcRow(keys.address, toHex(await sealJson(identity.sealKey, { ...payload, audioKey }))),
+    key: payloadKey,
+  };
+  const audioRow = {
+    ...grantRow,
+    key: audioKey,
+    attributes: [
+      { name: "arkiv.schema", type: "str", value: "pata.grant-audio.v1" },
+      { name: "sealed", type: "bytes", value: toHex(await sealBytes(identity.sealKey, clip)) },
+    ],
+    attributeSchema: [
+      { name: "arkiv.schema", type: "str", indexed: true },
+      { name: "sealed", type: "bytes", indexed: false },
+    ],
+  };
+  io.parse.mockImplementation(() => ({
+    householdName: "home.pata.eth",
+    payloadKey,
+    sessionKey: new Uint8Array(32),
+  }));
+  io.request.mockImplementation(async ({ params }) => (params[0] === audioKey ? audioRow : grantRow));
+  expect(await checkCourierLink("fragment")).toMatchObject({ state: "live", audio: clip });
+  expect(await checkCourierLink("fragment")).toMatchObject({ state: "live", audio: clip });
+  expect(io.request.mock.calls.filter(([request]) => request.params[0] === audioKey)).toHaveLength(1);
 });
