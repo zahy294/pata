@@ -6,26 +6,49 @@ import { MODELS } from "../../../shared/constants";
 /** Fractional US cents; route forwards this to the owner's spend counter. */
 export type ChargeUsage = (cents: number) => Promise<void>;
 
+type Model = typeof MODELS.extract | typeof MODELS.rank;
+
+/**
+ * One line per failed attempt for a live `wrangler tail` (Workers Logs stay off, so nothing is stored).
+ * Only the model, HTTP status, Anthropic's error type or the stop reason: never the request, the
+ * transcript, the reply or an error message, which can carry request details.
+ */
+function logFailure(model: Model, failure: unknown, stopReason?: string | null): void {
+  if (failure instanceof Anthropic.APIError) {
+    const body = failure.error as { error?: { type?: unknown } } | undefined;
+    const type = typeof body?.error?.type === "string" ? body.error.type : "unknown";
+    console.log(JSON.stringify({ event: "model_call_failed", model, status: failure.status ?? null, type }));
+  } else if (stopReason !== undefined) {
+    console.log(JSON.stringify({ event: "model_output_unusable", model, stopReason }));
+  } else {
+    console.log(
+      JSON.stringify({ event: "model_call_failed", model, status: null, type: "connection_or_timeout" }),
+    );
+  }
+}
+
 export async function structuredAddress<T>(
   apiKey: string,
   schema: z.ZodType<T>,
-  model: typeof MODELS.extract | typeof MODELS.rank,
+  model: Model,
   system: string,
   input: unknown,
   charge?: ChargeUsage,
 ): Promise<T> {
   const message =
     model === MODELS.extract ? "Address extraction unavailable" : "Landmark ranking unavailable";
-  try {
-    // One SDK retry (429, 5xx, 529 overloaded, connection errors, with backoff): a ~2-minute Anthropic
-    // outage on 2026-11-06 failed setup outright. 45 s per attempt keeps the worst case at the old 90 s.
-    const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 45_000, logLevel: "off" });
-    const format = zodOutputFormat(schema);
-    // A complete reply can still be unusable (not end_turn, or output failing the schema): about 1 call
-    // in 5 on 2026-11-06, which the SDK's HTTP retry doesn't cover. Ask once more; each attempt is charged.
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const response = await client.messages.parse({
-        model,
+  // One SDK retry per attempt (429, 5xx, 529 overloaded, dropped connections, with backoff). On
+  // 2026-11-06 about 1 extraction in 4 still failed fast, so a failed or unusable Haiku attempt falls back
+  // to Sonnet (~$0.008 an extraction); ranking and directions retry on the same model. Each attempt is
+  // charged; a spend-cap refusal stops at once.
+  const attempts: Model[] = model === MODELS.extract ? [MODELS.extract, MODELS.rank] : [model, model];
+  const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 45_000, logLevel: "off" });
+  const format = zodOutputFormat(schema);
+  for (const attemptModel of attempts) {
+    let response;
+    try {
+      response = await client.messages.parse({
+        model: attemptModel,
         max_tokens: 2048,
         output_config: {
           effort: "low",
@@ -44,21 +67,25 @@ export async function structuredAddress<T>(
         system,
         messages: [{ role: "user", content: JSON.stringify(input) }],
       });
-      const usage = response.usage;
-      // No prompt caching requested. Conservatively count any cache writes at 2x input
-      // and cache reads at full input rate rather than dropping their usage.
-      const inputTokens =
-        usage.input_tokens +
-        2 * (usage.cache_creation_input_tokens ?? 0) +
-        (usage.cache_read_input_tokens ?? 0);
-      const [inputRate, outputRate] = model === MODELS.extract ? [0.1, 0.5] : [2, 10];
-      await charge?.((inputTokens * inputRate + usage.output_tokens * outputRate) / 10_000);
-      if (response.stop_reason === "end_turn" && response.parsed_output !== null)
-        return response.parsed_output;
+    } catch (failure) {
+      logFailure(attemptModel, failure);
+      continue;
     }
-    throw new Error();
-  } catch {
-    // SDK errors can contain provider/request details. Never expose or log them.
-    throw new Error(message);
+    const usage = response.usage;
+    // No prompt caching requested. Conservatively count any cache writes at 2x input
+    // and cache reads at full input rate rather than dropping their usage.
+    const inputTokens =
+      usage.input_tokens +
+      2 * (usage.cache_creation_input_tokens ?? 0) +
+      (usage.cache_read_input_tokens ?? 0);
+    const [inputRate, outputRate] = attemptModel === MODELS.extract ? [0.1, 0.5] : [2, 10];
+    try {
+      await charge?.((inputTokens * inputRate + usage.output_tokens * outputRate) / 10_000);
+    } catch {
+      throw new Error(message);
+    }
+    if (response.stop_reason === "end_turn" && response.parsed_output !== null) return response.parsed_output;
+    logFailure(attemptModel, undefined, response.stop_reason);
   }
+  throw new Error(message);
 }
