@@ -25,6 +25,7 @@ export const verifiableFactoryAbi = parseAbi([
 
 // https://raw.githubusercontent.com/ensdomains/contracts-v2/07e55a056f5b6a9c90119f501bdd05714e67dddd/contracts/deployments/sepolia/UserRegistryImpl.json
 export const userRegistryAbi = parseAbi([
+  "error CannotSetPastExpiry(uint64 expiry)",
   "event LabelRegistered(uint256 indexed tokenId, bytes32 indexed labelHash, string label, address owner, uint64 expiry, address indexed sender)",
   "event LabelUnregistered(uint256 indexed tokenId, address indexed sender)",
   "function getOwner(uint256 anyId) view returns (address)",
