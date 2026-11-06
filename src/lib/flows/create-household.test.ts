@@ -16,6 +16,8 @@ const io = vi.hoisted(() => ({
   topup: vi.fn(),
   registerName: vi.fn(),
   readContract: vi.fn(),
+  owner: vi.fn(),
+  getCode: vi.fn(),
   getEnsText: vi.fn(),
   waitReceipt: vi.fn(),
   writeContract: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("../digipin", () => ({ encodeDigipin: () => "39J49LL8T4" }));
 vi.mock("../rpc", () => ({
   sepoliaPublicClient: () => ({
     readContract: io.readContract,
+    getCode: io.getCode,
     getEnsText: io.getEnsText,
     waitForTransactionReceipt: io.waitReceipt,
   }),
@@ -65,7 +68,16 @@ beforeEach(async () => {
   });
   io.topup.mockResolvedValue({ txHash: null, balanceWei: "100000000000000000" });
   io.registerName.mockResolvedValue({ txHash: "0x99" });
-  io.readContract.mockResolvedValue(keys.address);
+  io.owner.mockResolvedValue(keys.address);
+  io.readContract.mockImplementation(async ({ functionName, args }) => {
+    if (functionName === "predictProxyAddress")
+      return args[1] === BigInt("0xcbe12e0426f2abb53e7c3c04acdbbda69bc4682c53c77c89f0f870ab5e0b5fe2")
+        ? resolver
+        : grantRegistry;
+    if (functionName === "verifyContract")
+      return args[0] === resolver ? ENS.permissionedResolverImpl : ENS.userRegistryImpl;
+    return io.owner();
+  });
   io.getEnsText.mockImplementation(async ({ key }) => (key === "location" ? "Dharavi, 400017" : "400017"));
   io.writeContract.mockResolvedValueOnce("0x01").mockResolvedValueOnce("0x02");
   io.waitReceipt.mockImplementation(async ({ hash }) => {
@@ -153,7 +165,7 @@ it("rechecks a known registration transaction after a receipt timeout without re
 
 it("waits for the household's owner and both locality records to resolve before writing its home", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
-  io.readContract.mockResolvedValueOnce("0x0000000000000000000000000000000000000000");
+  io.owner.mockResolvedValueOnce("0x0000000000000000000000000000000000000000");
   io.getEnsText.mockResolvedValueOnce(null);
   expect((await createHousehold(keys, input)).name).toBe("sana.pata.eth");
   expect(
@@ -163,10 +175,10 @@ it("waits for the household's owner and both locality records to resolve before 
 
 it("can retry a failed resolution check without repeating chain writes", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
-  io.readContract.mockRejectedValue(new Error("SECRET_RPC_URL"));
+  io.owner.mockRejectedValue(new Error("SECRET_RPC_URL"));
   await expect(createHousehold(keys, input)).rejects.toThrow(/^Household name has not resolved yet/);
   expect(io.createEntity).not.toHaveBeenCalled();
-  io.readContract.mockResolvedValue(keys.address);
+  io.owner.mockResolvedValue(keys.address);
   expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
   expect(io.writeContract).toHaveBeenCalledTimes(2);
   expect(io.registerName).toHaveBeenCalledTimes(1);

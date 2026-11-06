@@ -91,6 +91,24 @@ export async function deployHouseholdContracts(
   const wallet = sepoliaWalletClient(keys.account);
   async function deploy(implementation: Hex, salt: bigint, data: Hex): Promise<Hex> {
     try {
+      const predicted = await client.readContract({
+        address: ENS.verifiableFactory,
+        abi: verifiableFactoryAbi,
+        functionName: "predictProxyAddress",
+        args: [keys.address, salt],
+      });
+      const code = await client.getCode({ address: predicted });
+      if (code && code !== "0x") {
+        const actualImplementation = await client.readContract({
+          address: ENS.verifiableFactory,
+          abi: verifiableFactoryAbi,
+          functionName: "verifyContract",
+          args: [predicted],
+        });
+        if (actualImplementation.toLowerCase() !== implementation.toLowerCase())
+          throw new Error("Unexpected household implementation");
+        return predicted;
+      }
       const hash = await wallet.writeContract({
         chain: sepolia,
         account: keys.account,
@@ -110,6 +128,7 @@ export async function deployHouseholdContracts(
         ({ args }) =>
           args.sender.toLowerCase() === keys.address.toLowerCase() &&
           args.implementation.toLowerCase() === implementation.toLowerCase() &&
+          args.proxyAddress.toLowerCase() === predicted.toLowerCase() &&
           args.salt === salt,
       );
       if (!event) throw new Error("Household deployment receipt is missing its proxy address");

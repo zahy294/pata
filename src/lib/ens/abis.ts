@@ -5,7 +5,7 @@
 //   curl -s https://raw.githubusercontent.com/ensdomains/contracts-v2/07e55a056f5b6a9c90119f501bdd05714e67dddd/contracts/deployments/sepolia/UserRegistryImpl.json
 //
 // Needed for P0:
-// - VerifiableFactory: deployProxy, predictProxyAddress, event ProxyDeployed
+// - VerifiableFactory: deployProxy, predictProxyAddress, verifyContract, event ProxyDeployed
 // - UserRegistry (PermissionedRegistry): initialize, register, unregister, getState, getStatus,
 //   getOwner, setSubregistry, events LabelRegistered, LabelUnregistered
 // - PermissionedResolver: initialize, setText, multicall, resolve
@@ -20,6 +20,7 @@ export const verifiableFactoryAbi = parseAbi([
   "event ProxyDeployed(address indexed sender, address indexed proxyAddress, uint256 salt, address implementation)",
   "function deployProxy(address implementation, uint256 salt, bytes data) returns (address proxy)",
   "function predictProxyAddress(address deployer, uint256 salt) view returns (address proxy)",
+  "function verifyContract(address proxy) view returns (address implementation)",
 ]);
 
 // https://raw.githubusercontent.com/ensdomains/contracts-v2/07e55a056f5b6a9c90119f501bdd05714e67dddd/contracts/deployments/sepolia/UserRegistryImpl.json

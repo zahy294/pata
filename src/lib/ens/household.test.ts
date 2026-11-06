@@ -10,11 +10,13 @@ const rpc = vi.hoisted(() => ({
   readContract: vi.fn(),
   writeContract: vi.fn(),
   waitForTransactionReceipt: vi.fn(),
+  getCode: vi.fn(),
 }));
 vi.mock("../rpc", () => ({
   sepoliaPublicClient: () => ({
     readContract: rpc.readContract,
     waitForTransactionReceipt: rpc.waitForTransactionReceipt,
+    getCode: rpc.getCode,
   }),
   sepoliaWalletClient: () => ({ writeContract: rpc.writeContract }),
 }));
@@ -27,9 +29,75 @@ const locality = { name: "Dharavi", pinCode: "400017" };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("NEXT_PUBLIC_PATA_REGISTRY", registry);
+  rpc.readContract.mockImplementation(async ({ functionName, args }) => {
+    if (functionName === "predictProxyAddress")
+      return args[1] === BigInt("0xcbe12e0426f2abb53e7c3c04acdbbda69bc4682c53c77c89f0f870ab5e0b5fe2")
+        ? resolver
+        : grantRegistry;
+    if (functionName === "verifyContract")
+      return args[0] === resolver ? ENS.permissionedResolverImpl : ENS.userRegistryImpl;
+  });
 });
 
 describe("household ENS setup", () => {
+  it("reuses already deployed household proxies only after verifying their implementations", async () => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    rpc.getCode.mockResolvedValue("0x6000");
+    expect(await deployHouseholdContracts(keys, "sana.pata.eth", locality)).toEqual({
+      resolver,
+      grantRegistry,
+    });
+    expect(rpc.writeContract).not.toHaveBeenCalled();
+    expect(rpc.readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "predictProxyAddress",
+        args: [keys.address, expect.any(BigInt)],
+      }),
+    );
+    expect(rpc.readContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "verifyContract", args: [resolver] }),
+    );
+  });
+  it("fails closed when predicted code belongs to an unexpected implementation", async () => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    rpc.getCode.mockResolvedValue("0x6000");
+    const normalRead = rpc.readContract.getMockImplementation()!;
+    rpc.readContract.mockImplementation(async (request) =>
+      request.functionName === "verifyContract" ? registry : normalRead(request),
+    );
+    await expect(deployHouseholdContracts(keys, "sana.pata.eth", locality)).rejects.toThrow(
+      /^Could not deploy household contract$/,
+    );
+    expect(rpc.writeContract).not.toHaveBeenCalled();
+  });
+  it("resumes after a resolver deployment without sending that deployment again", async () => {
+    const keys = await deriveHouseholdKeys(new Uint8Array(32));
+    rpc.getCode.mockImplementation(async ({ address }) => (address === resolver ? "0x6000" : undefined));
+    rpc.writeContract.mockResolvedValue("0x02");
+    rpc.waitForTransactionReceipt.mockImplementation(async () => {
+      const [implementation, salt] = rpc.writeContract.mock.calls[0][0].args;
+      return {
+        status: "success",
+        logs: [
+          {
+            address: ENS.verifiableFactory,
+            topics: encodeEventTopics({
+              abi: verifiableFactoryAbi,
+              eventName: "ProxyDeployed",
+              args: { sender: keys.address, proxyAddress: grantRegistry },
+            }),
+            data: encodeAbiParameters([{ type: "uint256" }, { type: "address" }], [salt, implementation]),
+          },
+        ],
+      };
+    });
+    expect(await deployHouseholdContracts(keys, "sana.pata.eth", locality)).toEqual({
+      resolver,
+      grantRegistry,
+    });
+    expect(rpc.writeContract).toHaveBeenCalledTimes(1);
+    expect(rpc.writeContract.mock.calls[0][0].args[0]).toBe(ENS.userRegistryImpl);
+  });
   it.each(["reverted", "missing", "wrong factory", "wrong salt"])(
     "rejects a %s deployment receipt without starting the second deploy",
     async (problem) => {
