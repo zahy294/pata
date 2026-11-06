@@ -72,8 +72,9 @@ export default function MapViewInner({
       container: containerRef.current,
       style: "https://tiles.openfreemap.org/styles/liberty",
       center: [initialCenterLng, initialCenterLat],
-      zoom: 14,
-      minZoom: 11,
+      // Street level (buildings, shop names, lanes) when there's a pin; pinch out as far as the whole country.
+      zoom: center ? 16 : 14,
+      minZoom: 3,
       maxZoom: 19,
       // No maxBounds: tiles come from OpenFreeMap worldwide, and clamping to the demo box hid the pin for
       // any home outside Dharavi/BKC.
@@ -111,7 +112,9 @@ export default function MapViewInner({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !center || bbox) return;
-    map.easeTo({ center: [center.lon, center.lat], zoom: Math.max(map.getZoom(), 15) });
+    // Only follow the pin when it leaves the screen (e.g. another candidate was picked), so a tap or a
+    // drag never shifts the map under the household's finger or changes their zoom.
+    if (!map.getBounds().contains([center.lon, center.lat])) map.easeTo({ center: [center.lon, center.lat] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [center?.lat, center?.lon]);
 
@@ -176,7 +179,7 @@ export default function MapViewInner({
   return (
     <div
       ref={containerRef}
-      className="relative h-72 w-full overflow-hidden rounded-xl bg-neutral-100 shadow-sm"
+      className="relative h-96 w-full overflow-hidden rounded-xl bg-neutral-100 shadow-sm"
       aria-label="Map view"
     />
   );

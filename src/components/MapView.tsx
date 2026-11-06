@@ -11,7 +11,7 @@ const MapViewInner = dynamic(() => import("./MapViewInner"), {
   ssr: false,
   loading: () => (
     <div
-      className="flex h-72 w-full items-center justify-center rounded-xl bg-neutral-100 text-sm text-neutral-400"
+      className="flex h-96 w-full items-center justify-center rounded-xl bg-neutral-100 text-sm text-neutral-400"
       aria-label="Loading map…"
     >
       Loading map…

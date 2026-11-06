@@ -121,7 +121,6 @@ export default function PinPicker({
 
         <MapView
           center={activePoint}
-          bbox={hasCandidates ? undefined : bbox}
           pins={mapPins}
           onPinMoved={handlePinMoved}
           onMapClick={(point) => handlePinMoved(hasCandidates ? selectedIndex : 0, point)}
