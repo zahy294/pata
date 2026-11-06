@@ -69,7 +69,46 @@ it("retries a failing provider once, then drops its HTTP error details", async (
   await expect(
     extractAddressParts("test-key", { wayToTheDoor: "near gate", language: "en" }),
   ).rejects.toThrow(/^Address extraction unavailable$/);
-  expect(network).toHaveBeenCalledTimes(2);
+  // Haiku and its SDK retry, then the Sonnet fallback and its SDK retry.
+  expect(network.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).model)).toEqual([
+    "claude-haiku-5-5",
+    "claude-haiku-5-5",
+    "claude-sonnet-5-5",
+    "claude-sonnet-5-5",
+  ]);
+});
+
+it("falls back to Sonnet when Haiku keeps failing, and logs only the failure category", async () => {
+  const output = { locality: { name: "Dharavi", pinCode: "400017" }, landmarkPhrases: ["Murugan temple"] };
+  const overloaded = () =>
+    Response.json(
+      { type: "error", error: { type: "overloaded_error", message: "PRIVATE_DETAIL" } },
+      { status: 529 },
+    );
+  const network = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(overloaded())
+    .mockResolvedValueOnce(overloaded())
+    .mockResolvedValue(modelReply(output));
+  vi.stubGlobal("fetch", network);
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  const charge = vi.fn<(cents: number) => Promise<void>>().mockResolvedValue();
+  await expect(
+    extractAddressParts("test-key", { wayToTheDoor: "PRIVATE_WAY Dharavi 400017", language: "en" }, charge),
+  ).resolves.toEqual(output);
+  expect(JSON.parse(String(network.mock.calls[2][1]?.body)).model).toBe("claude-sonnet-5-5");
+  expect(charge).toHaveBeenCalledTimes(1);
+  const lines = log.mock.calls.map(([line]) => String(line));
+  expect(lines).toEqual([
+    JSON.stringify({
+      event: "model_call_failed",
+      model: "claude-haiku-5-5",
+      status: 529,
+      type: "overloaded_error",
+    }),
+  ]);
+  expect(lines.join()).not.toMatch(/PRIVATE/);
+  log.mockRestore();
 });
 
 it("recovers from one transient overload without the household seeing an error", async () => {
