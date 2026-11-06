@@ -46,15 +46,15 @@ export async function checkCourierLink(fragmentOrStored: string): Promise<Courie
   try {
     const identity = await deriveGrantIdentity(link.sessionKey);
     const status = await grantStatusByName(`${identity.label}.${link.householdName}`);
-    if (!status.live || status.owner.toLowerCase() !== identity.owner.address.toLowerCase())
-      return { state: "ended", locality };
-    const owner = await householdOwner(link.householdName);
-    if (!owner) return { state: "ended", locality };
-    const opened = await readGrantPayload(link.payloadKey, identity.sealKey, owner);
-    if (!opened) {
+    const ended = () => {
       audioByPayload.delete(link.payloadKey);
-      return { state: "ended", locality };
-    }
+      return { state: "ended" as const, locality };
+    };
+    if (!status.live || status.owner.toLowerCase() !== identity.owner.address.toLowerCase()) return ended();
+    const owner = await householdOwner(link.householdName);
+    if (!owner) return ended();
+    const opened = await readGrantPayload(link.payloadKey, identity.sealKey, owner);
+    if (!opened) return ended();
     const { audioKey } = opened.payload;
     // An RPC failure throws (→ checking) and is retried; a missing clip is remembered as null.
     if (!audioByPayload.has(link.payloadKey))
