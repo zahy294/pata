@@ -61,7 +61,7 @@ it.each(["refusal", "max_tokens"])(
   },
 );
 
-it("drops provider HTTP error details without retries", async () => {
+it("retries a failing provider once, then drops its HTTP error details", async () => {
   const network = vi
     .fn<typeof fetch>()
     .mockResolvedValue(Response.json({ error: { message: "PRIVATE_KEY_AND_BODY" } }, { status: 500 }));
@@ -69,7 +69,20 @@ it("drops provider HTTP error details without retries", async () => {
   await expect(
     extractAddressParts("test-key", { wayToTheDoor: "near gate", language: "en" }),
   ).rejects.toThrow(/^Address extraction unavailable$/);
-  expect(network).toHaveBeenCalledTimes(1);
+  expect(network).toHaveBeenCalledTimes(2);
+});
+
+it("recovers from one transient overload without the household seeing an error", async () => {
+  const output = { locality: { name: "Dharavi", pinCode: "400017" }, landmarkPhrases: ["Murugan temple"] };
+  const network = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ error: { type: "overloaded_error" } }, { status: 529 }))
+    .mockResolvedValue(modelReply(output));
+  vi.stubGlobal("fetch", network);
+  await expect(
+    extractAddressParts("test-key", { wayToTheDoor: "Dharavi 400017 near Murugan temple", language: "en" }),
+  ).resolves.toEqual(output);
+  expect(network).toHaveBeenCalledTimes(2);
 });
 
 it("validates the request before calling a model", async () => {
