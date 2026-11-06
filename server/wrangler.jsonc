@@ -17,7 +17,7 @@
     // Daily cap on model + speech spend, in US cents, counted in KV.
     "DAILY_SPEND_CAP_CENTS": "300",
     // pata.eth's own UserRegistry proxy, set after P0-2.
-    "PATA_REGISTRY_ADDRESS": "",
+    "PATA_REGISTRY_ADDRESS": "0x8961FBa6e336FfC00b564d873485Cc342DD00133",
     "SEPOLIA_RPC_URL": "https://ethereum-sepolia-rpc.publicnode.com",
     "ARKIV_RPC_URL": "https://rpc.rabdi.db-chain.testnet.arkiv.network"
   },

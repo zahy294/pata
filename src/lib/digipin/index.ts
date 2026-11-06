@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 08.04.2025 Department of Posts.
+// Adapted from India Post DIGIPIN v2.0.0 (a15339e8): TypeScript, numeric cell bounds,
+// finite-coordinate validation and Pata display helpers. Licence: ./LICENSE.apache-2.0.
 // DIGIPIN encode and decode: India Post v2.0.0, no hyphens. Plain, tested code (CLAUDE.md invariant).
 // Owner: AI/ML (P0-4). Read docs/research/digipin.md. Write digipin.test.ts first (TDD).
 // The same vectors (vectors.json) are used by the Solidity resolver's tests (P1-1).
@@ -11,6 +15,8 @@ export const DIGIPIN_GRID = [
   ["L", "M", "P", "T"],
 ] as const;
 
+const DIGIPIN_ALPHABET = DIGIPIN_GRID.flat().join("");
+
 export const DIGIPIN_BOUNDS = { minLat: 2.5, maxLat: 38.5, minLon: 63.5, maxLon: 99.5 } as const;
 
 export interface DigipinCell {
@@ -22,30 +28,67 @@ export interface DigipinCell {
 
 /** (lat, lon) → 10-character canonical code, e.g. (28.622788, 77.213033) → "39J49LL8T4". Throws outside the bounds. */
 export function encodeDigipin(point: LatLon): string {
-  void point;
-  throw new Error("encodeDigipin: not implemented (P0-4)");
+  if (!Number.isFinite(point.lat) || point.lat < DIGIPIN_BOUNDS.minLat || point.lat > DIGIPIN_BOUNDS.maxLat) {
+    throw new RangeError("Latitude outside DIGIPIN bounds");
+  }
+  if (!Number.isFinite(point.lon) || point.lon < DIGIPIN_BOUNDS.minLon || point.lon > DIGIPIN_BOUNDS.maxLon) {
+    throw new RangeError("Longitude outside DIGIPIN bounds");
+  }
+  let minLat: number = DIGIPIN_BOUNDS.minLat;
+  let maxLat: number = DIGIPIN_BOUNDS.maxLat;
+  let minLon: number = DIGIPIN_BOUNDS.minLon;
+  let maxLon: number = DIGIPIN_BOUNDS.maxLon;
+  let code = "";
+  for (let level = 0; level < 10; level++) {
+    const latStep = (maxLat - minLat) / 4;
+    const lonStep = (maxLon - minLon) / 4;
+    const row = Math.max(0, Math.min(3, 3 - Math.floor((point.lat - minLat) / latStep)));
+    const col = Math.max(0, Math.min(3, Math.floor((point.lon - minLon) / lonStep)));
+    code += DIGIPIN_GRID[row][col];
+    minLat += (3 - row) * latStep;
+    maxLat = minLat + latStep;
+    minLon += col * lonStep;
+    maxLon = minLon + lonStep;
+  }
+  return code;
 }
 
-/** Canonical or lowercase code → its cell. Throws on an invalid code. */
+/** Canonical, lowercase or display-spaced code → its cell. Throws on an invalid code. */
 export function decodeDigipin(code: string): DigipinCell {
-  void code;
-  throw new Error("decodeDigipin: not implemented (P0-4)");
+  if (!isValidDigipin(code)) throw new Error("Invalid DIGIPIN");
+  code = code.replace(/ /g, "").toUpperCase();
+  let minLat: number = DIGIPIN_BOUNDS.minLat;
+  let minLon: number = DIGIPIN_BOUNDS.minLon;
+  let size: number = DIGIPIN_BOUNDS.maxLat - DIGIPIN_BOUNDS.minLat;
+  for (const symbol of code) {
+    const index = DIGIPIN_ALPHABET.indexOf(symbol);
+    const row = Math.floor(index / 4);
+    const col = index % 4;
+    size /= 4;
+    minLat += (3 - row) * size;
+    minLon += col * size;
+  }
+  return {
+    center: { lat: minLat + size / 2, lon: minLon + size / 2 },
+    southWest: { lat: minLat, lon: minLon },
+    northEast: { lat: minLat + size, lon: minLon + size },
+  };
 }
 
 /** `^[23456789CJKLMPFT]{10}$` after uppercasing and removing spaces. */
 export function isValidDigipin(code: string): boolean {
-  void code;
-  throw new Error("isValidDigipin: not implemented (P0-4)");
+  return /^[23456789CJKLMPFT]{10}$/.test(code.replace(/ /g, "").toUpperCase());
 }
 
 /** "39J49LL8T4" → "39j49ll8t4" (the grid name label, P1-1). */
 export function toGridLabel(code: string): string {
-  void code;
-  throw new Error("toGridLabel: not implemented (P0-4)");
+  if (!isValidDigipin(code)) throw new Error("Invalid DIGIPIN");
+  return code.replace(/ /g, "").toLowerCase();
 }
 
-/** "39J49LL8T4" → "39J 49L L8T4" (3-4-3 with spaces; never hyphens). */
+/** "39J49LL8T4" → "39J 49LL 8T4" (3-4-3 with spaces; never hyphens). */
 export function formatDigipin(code: string): string {
-  void code;
-  throw new Error("formatDigipin: not implemented (P0-4)");
+  if (!isValidDigipin(code)) throw new Error("Invalid DIGIPIN");
+  const canonical = code.replace(/ /g, "").toUpperCase();
+  return `${canonical.slice(0, 3)} ${canonical.slice(3, 7)} ${canonical.slice(7)}`;
 }

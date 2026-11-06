@@ -13,6 +13,12 @@ To run the Worker locally you need `server/.dev.vars` with `ANTHROPIC_API_KEY` a
 
 Until the owner's guard (P0-6) lands, every route returns 500, so unit-test your functions directly with Vitest and mocked `fetch`.
 
+## Completion checklist
+
+- [x] P0-4: DIGIPIN encode/decode, reusable vectors, 1,000 seeded round-trips and edge tests; `npm run check` passes. Result: `docs/plans/P0-4.md`.
+- [x] P0-7 geometry: shared distance, bearing, offset, segment snapping and pin-spread tests; `npm run check` passes. Result: `docs/plans/P0-7-geo.md`. Map search, AI and speech remain pending.
+- [ ] P0-7 map search: adapters and 26 tests implemented; real Dharavi boundary verified, live Overpass feature check blocked by upstream/network failures. Owner global-coordination integration remains open. Details: `docs/plans/P0-7-osm.md`.
+
 ---
 
 ### Prompt 1: DIGIPIN (start now)
@@ -25,7 +31,7 @@ Ticket: P0-4. Use the tdd skill.
 3. Load vectors from src/lib/digipin/vectors.json. Dak Bhawan (28.622788, 77.213033) -> 39J49LL8T4 is the reference. Vectors 2 and 3 conflict upstream (digipin.md says why): if one fails, record which and why in the plan rather than bending the code.
 4. Round-trip test: 1,000 seeded random points inside the bounds; each encodes to a code whose decoded cell contains the point.
 5. Compute the Dak Bhawan decode centre and add it to vectors.json (the Solidity resolver tests will reuse the file).
-Done when npm run check passes. Small commits ("P0-4: encode", "P0-4: decode", ...), pull --rebase, push. Post "Unblocks: digipin" in the team chat.
+Done when npm run check passes. Small commits ("P0-4: encode", "P0-4: decode", ...), push your branch, open a pull request to main. Post "Unblocks: digipin" in the team chat.
 ```
 
 ### Prompt 2: plain geometry

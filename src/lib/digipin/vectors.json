@@ -3,8 +3,48 @@
   "encode": [
     { "name": "Dak Bhawan (India Post tech doc)", "lat": 28.622788, "lon": 77.213033, "code": "39J49LL8T4" },
     { "name": "v2 README encode", "lat": 13.11179621, "lon": 80.20264269, "code": "4T396F42L7" },
-    { "name": "v1 README encode", "lat": 12.9716, "lon": 77.5946, "code": "4P3JK852C9" }
+    { "name": "v1 README encode", "lat": 12.9716, "lon": 77.5946, "code": "4P3JK852C9" },
+    {
+      "name": "Dharavi public sample (verified against pinned India Post source)",
+      "lat": 19.045,
+      "lon": 72.855,
+      "code": "4FK52J494L"
+    },
+    {
+      "name": "BKC public sample (verified against pinned India Post source)",
+      "lat": 19.06,
+      "lon": 72.87,
+      "code": "4FK59PL32M"
+    }
   ],
-  "decode": [{ "name": "v2 README decode", "code": "4P3JK852C9", "lat": 12.971601, "lon": 77.594584 }],
-  "invalid": ["", "39J49LL8T", "39J49LL8T44", "39J49LL8TA", "39J-49L-L8T4", "0000000000"]
+  "decode": [
+    { "name": "v2 README decode", "code": "4P3JK852C9", "lat": 12.971601, "lon": 77.594584 },
+    {
+      "name": "Dak Bhawan computed centre (verified against pinned India Post source)",
+      "code": "39J49LL8T4",
+      "lat": 28.622793197631836,
+      "lon": 77.21304893493652
+    }
+  ],
+  "rejectedUpstream": [
+    {
+      "name": "swagger.yaml Chennai encode",
+      "lat": 13.067526,
+      "lon": 80.270956,
+      "claimedCode": "4T396F42L7",
+      "actualCode": "4T38MJK524",
+      "reason": "The pinned India Post v2 encoder agrees with the README coordinates, not this Swagger pairing."
+    }
+  ],
+  "invalid": [
+    "",
+    "39J49LL8T",
+    "39J49LL8T44",
+    "39J49LL8TA",
+    "39J-49L-L8T4",
+    "0000000000",
+    "39J49LL8T4\n",
+    "39J\t49LL8T4",
+    "３9J49LL8T4"
+  ]
 }

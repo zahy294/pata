@@ -19,12 +19,27 @@ Four people, each with a Codex agent. Each developer role has its own file with 
 6. Install the **tdd** skill in Codex if you haven't. Open Codex in the repo folder; it reads `AGENTS.md` by itself.
 7. Open your role file and paste **Prompt 1**.
 
+## Branches
+
+Each role works on its own branch; nobody pushes to `main` except the project owner merging pull requests.
+
+| Role              | Branch       |
+| ----------------- | ------------ |
+| Blockchain        | `blockchain` |
+| AI/ML             | `feat/ai-ml` |
+| Frontend          | `frontend`   |
+| Chain ops + pitch | `chain-ops`  |
+
+- "Push" in every prompt means `git push origin <your branch>`.
+- When a prompt is done and `npm run check` passes, open a pull request to `main`. The owner merges it with **a merge commit, not a squash** (the small commits are judged). Merge early and often: the "Unblocks" lines only help once the work is in `main`.
+- To pick up teammates' work: `git fetch` then `git merge origin/main` into your branch. Merge, don't rebase: rebasing rewrites pushed commits.
+
 ## How to use the prompts
 
 - Paste one prompt at a time. Read Codex's plan file before letting it code; stop it if the plan touches files you don't own.
-- After each prompt: `npm run check`, look at the diff, then let it commit and push.
+- After each prompt: `npm run check`, look at the diff, then let it commit, push your branch, and open a pull request.
 - If Codex gets stuck on a library, tell it to read the research note named in the prompt, not the web.
-- Post in the team chat when you finish a prompt that someone else is waiting on (the "Unblocks" line).
+- Post in the team chat when your pull request that someone else is waiting on is merged (the "Unblocks" line).
 
 ## File ownership
 
