@@ -201,6 +201,13 @@ export async function makeDirections(
   };
 }
 
+export async function checkHouseholdName(
+  label: string,
+): Promise<"available" | "taken" | "invalid"> {
+  if (!isValidHouseholdLabel(label)) return "invalid";
+  return (await householdLabelStatus(label)) === 0 ? "available" : "taken";
+}
+
 export async function householdLabelStatus(
   label: string,
 ): Promise<0 | 1 | 2> {
