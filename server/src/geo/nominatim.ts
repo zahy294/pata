@@ -1,6 +1,7 @@
 // AI/ML P0-7. Only locality + PIN code leave this adapter, never the way to the door.
 import { z } from "zod";
 import type { Locality } from "../../../shared/domain";
+import { distanceMetres } from "../../../shared/geo";
 import {
   GEO_CACHE_SECONDS,
   GEO_USER_AGENT,
@@ -38,6 +39,8 @@ const postcodeRowsSchema = z.array(
 );
 /** Half the side of the search box around a PIN code's centre: 0.012° ≈ 1.3 km. */
 const PIN_BOX_DEGREES = 0.012;
+/** A name match without a postcode must lie this close to the PIN code centre (an urban PIN area is ~5 km). */
+const NAME_MATCH_MAX_METRES = 15_000;
 
 export async function localityBBox(
   kv: GeoCache,
@@ -47,8 +50,8 @@ export async function localityBBox(
   const name = locality.name.normalize("NFKC").trim().replace(/\s+/g, " ");
   if (!name || name.length > 80 || !/^\d{6}$/.test(locality.pinCode)) throw new Error("Invalid locality");
   const endpoint = options.nominatimUrl ?? "https://nominatim.openstreetmap.org/search";
-  // v2: v1 cached "not found" for 30 days before the PIN-centre fallback existed.
-  const key = await geoCacheKey("locality", `v2|${endpoint}|${name.toLowerCase()}|${locality.pinCode}`);
+  // v3: v1 cached "not found" before the PIN-centre fallback; v2 could cache a same-named place elsewhere.
+  const key = await geoCacheKey("locality", `v3|${endpoint}|${name.toLowerCase()}|${locality.pinCode}`);
   const search = async (params: Record<string, string>): Promise<unknown> => {
     const url = new URL(endpoint);
     url.search = new URLSearchParams({
@@ -72,28 +75,40 @@ export async function localityBBox(
       const row = rowsSchema.parse(
         await search({ q: `${name}, ${locality.pinCode}`, addressdetails: "1", featureType: "settlement" }),
       )[0];
-      let bbox: BBox | null = null;
-      if (
-        row &&
-        row.type !== "postcode" &&
-        row.addresstype !== "postcode" &&
-        (!row.address?.postcode || row.address.postcode.replace(/\s/g, "") === locality.pinCode)
-      ) {
-        const [south, north, west, east] = row.boundingbox;
-        bbox = bboxSchema.parse([west, south, east, north]);
+      let named: BBox | null = null;
+      let postcodeConfirmed = false;
+      if (row && row.type !== "postcode" && row.addresstype !== "postcode") {
+        const postcode = row.address?.postcode?.replace(/\s/g, "");
+        if (!postcode || postcode === locality.pinCode) {
+          const [south, north, west, east] = row.boundingbox;
+          named = bboxSchema.parse([west, south, east, north]);
+          postcodeConfirmed = postcode === locality.pinCode;
+        }
       }
+      let bbox: BBox | null = postcodeConfirmed ? named : null;
       if (!bbox) {
         // OSM's Indian postcodes are patchy (BKC is filed under 400098, not 400051), so "area, PIN" often
-        // finds nothing. Fall back to the PIN's centre: Nominatim's own postcode box is a fixed ~10 km
-        // square, too big for a landmark search, so search a ~2.6 km box around the centre instead.
+        // finds nothing, or a same-named place elsewhere with no postcode at all (a Mumbai household was
+        // sent to Bangalore on 2026-11-06). Check against the PIN's centre: keep a postcode-less name
+        // match only near it, else search a ~2.6 km box around the centre (Nominatim's own postcode box
+        // is a fixed ~10 km square, too big for a landmark search).
         const centre = postcodeRowsSchema.parse(await search({ postalcode: locality.pinCode }))[0];
-        if (centre)
-          bbox = bboxSchema.parse([
-            centre.lon - PIN_BOX_DEGREES,
-            centre.lat - PIN_BOX_DEGREES,
-            centre.lon + PIN_BOX_DEGREES,
-            centre.lat + PIN_BOX_DEGREES,
-          ]);
+        if (centre) {
+          const nearPin =
+            named !== null &&
+            distanceMetres(
+              { lat: (named[1] + named[3]) / 2, lon: (named[0] + named[2]) / 2 },
+              { lat: centre.lat, lon: centre.lon },
+            ) <= NAME_MATCH_MAX_METRES;
+          bbox = nearPin
+            ? named
+            : bboxSchema.parse([
+                centre.lon - PIN_BOX_DEGREES,
+                centre.lat - PIN_BOX_DEGREES,
+                centre.lon + PIN_BOX_DEGREES,
+                centre.lat + PIN_BOX_DEGREES,
+              ]);
+        }
       }
       await kv.put(key, JSON.stringify(bbox), { expirationTtl: GEO_CACHE_SECONDS });
       return bbox;

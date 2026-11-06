@@ -68,6 +68,33 @@ describe("localityBBox", () => {
     expect(second.searchParams.get("countrycodes")).toBe("in");
     expect(second.searchParams.get("q")).toBeNull();
   });
+  it("rejects a same-named place far from the PIN code, using the PIN area instead", async () => {
+    const { kv } = memoryCache();
+    const bangalore = { ...reply[0], boundingbox: ["12.96", "12.98", "77.59", "77.61"], address: {} };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json([bangalore]))
+        .mockResolvedValueOnce(Response.json([{ lat: "19.1159", lon: "72.8542" }])),
+    );
+    const bbox = await localityBBox(kv, { name: "Sunshine Colony", pinCode: "400069" });
+    expect(bbox).toEqual([72.8542 - 0.012, 19.1159 - 0.012, 72.8542 + 0.012, 19.1159 + 0.012]);
+  });
+  it("keeps a postcode-less name match that lies near the PIN code centre", async () => {
+    const { kv } = memoryCache();
+    const near = { ...reply[0], address: {} };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json([near]))
+        .mockResolvedValueOnce(Response.json([{ lat: "19.0430", lon: "72.8550" }])),
+    );
+    await expect(localityBBox(kv, locality)).resolves.toEqual([
+      72.8484246, 19.0368844, 72.8651342, 19.0542277,
+    ]);
+  });
   it("also falls back when OSM files the area under a different PIN code", async () => {
     const { kv } = memoryCache();
     vi.stubGlobal(
@@ -134,7 +161,10 @@ describe("localityBBox", () => {
   });
   it("returns null when no locality was found", async () => {
     const { kv } = memoryCache();
-    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async () => Response.json([])));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockImplementation(async () => Response.json([])),
+    );
     await expect(localityBBox(kv, locality)).resolves.toBeNull();
   });
   it("searches only the locality and converts Nominatim's coordinate order", async () => {
