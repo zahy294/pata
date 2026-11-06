@@ -20,6 +20,8 @@ const POLL_INTERVAL_MS = 3000;
 // The registry decides liveness, so a failed check normally hides the door. Hold a live view through at
 // most this many consecutive failed checks (a brief Anon-RPC hiccup), and never past the grant's end.
 const MAX_HELD_CHECKS = 2;
+// After this many failed checks in a row, say what usually helps instead of only spinning.
+const STALL_CHECKS = 3;
 
 export default function CourierPage() {
   const [view, setView] = useState<CourierView>({
@@ -28,10 +30,11 @@ export default function CourierPage() {
   });
   const [knownLocality, setKnownLocality] = useState<Locality | null>(null);
   const [digipinCopied, setDigipinCopied] = useState(false);
+  const [stalled, setStalled] = useState(false);
 
   useEffect(() => {
     let active = true;
-    let timer: ReturnType<typeof setInterval> | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     let fragment = "";
     const hash = window.location.hash;
@@ -72,6 +75,7 @@ export default function CourierPage() {
         }
 
         failedChecks = result.state === "checking" ? failedChecks + 1 : 0;
+        setStalled(result.state === "checking" && failedChecks >= STALL_CHECKS);
         setView((previous) =>
           result.state === "checking" &&
           previous.state === "live" &&
@@ -87,32 +91,27 @@ export default function CourierPage() {
           } catch {
             // ignore storage errors
           }
-          if (timer) {
-            clearInterval(timer);
-            timer = null;
-          }
+          return;
         }
       } catch {
         // Keep polling on transient network errors
       }
+      // One check at a time: a check is ~5 reads through the mixnet (10-20 s on a phone), so a fixed
+      // 3 s interval piled up overlapping checks that slowed each other into timeouts (2026-11-06).
+      if (active) timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
     };
 
     void poll();
-    timer = setInterval(() => {
-      void poll();
-    }, POLL_INTERVAL_MS);
 
     return () => {
       active = false;
-      if (timer) clearInterval(timer);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
-  const displayLocality =
-    ("locality" in view && view.locality) ? view.locality : knownLocality;
+  const displayLocality = "locality" in view && view.locality ? view.locality : knownLocality;
 
-  const formattedDigipin =
-    view.state === "live" ? formatDigipin(view.payload.digipin) : "";
+  const formattedDigipin = view.state === "live" ? formatDigipin(view.payload.digipin) : "";
 
   return (
     <main className="flex flex-col gap-4 pb-10">
@@ -156,13 +155,8 @@ export default function CourierPage() {
 
       {/* INVALID STATE */}
       {view.state === "invalid" && (
-        <section
-          role="alert"
-          className="rounded-2xl border border-[#D9534F]/40 bg-[#FDF3F2] p-5 shadow-xs"
-        >
-          <p className="text-base font-bold text-[#8A2522]">
-            This link doesn&apos;t work
-          </p>
+        <section role="alert" className="rounded-2xl border border-[#D9534F]/40 bg-[#FDF3F2] p-5 shadow-xs">
+          <p className="text-base font-bold text-[#8A2522]">This link doesn&apos;t work</p>
           <p className="mt-1 text-xs leading-relaxed text-[#6E2A27]">
             Ask the resident to share a fresh courier link from their phone.
           </p>
@@ -171,21 +165,16 @@ export default function CourierPage() {
 
       {/* ENDED STATE */}
       {view.state === "ended" && (
-        <section
-          role="status"
-          className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 shadow-xs"
-        >
+        <section role="status" className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 shadow-xs">
           <div className="flex items-start gap-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F2ECE1] text-sm">
               🔒
             </span>
             <div>
-              <p className="text-base font-bold text-[#1F1C18]">
-                This link has ended
-              </p>
+              <p className="text-base font-bold text-[#1F1C18]">This link has ended</p>
               <p className="mt-1 text-xs leading-relaxed text-[#6E655A]">
-                This page no longer shows the door details or directions. Only the
-                public neighbourhood locality is shown above.
+                This page no longer shows the door details or directions. Only the public neighbourhood
+                locality is shown above.
               </p>
             </div>
           </div>
@@ -198,6 +187,12 @@ export default function CourierPage() {
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
           <span>Unlocking doorstep directions…</span>
         </section>
+      )}
+      {view.state === "checking" && stalled && (
+        <p className="rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3 text-xs leading-relaxed text-[#6E655A]">
+          Still reaching the private network. Some Wi-Fi networks block it: switch to mobile data, then pull
+          down to reload. The link is kept for this tab.
+        </p>
       )}
 
       {/* LIVE STATE — Text & Audio First (for slow 4G phones), Map After */}
@@ -293,12 +288,9 @@ export default function CourierPage() {
             />
             <div className="flex items-center justify-between border-t border-[#E6DAC6] px-3.5 py-2 text-xs text-[#6E655A]">
               <span className="font-mono">
-                {view.payload.pin.lat.toFixed(5)}° N,{" "}
-                {view.payload.pin.lon.toFixed(5)}° E
+                {view.payload.pin.lat.toFixed(5)}° N, {view.payload.pin.lon.toFixed(5)}° E
               </span>
-              <span className="font-semibold text-[#046A38]">
-                Exact Door Pin
-              </span>
+              <span className="font-semibold text-[#046A38]">Exact Door Pin</span>
             </div>
           </section>
         </div>
