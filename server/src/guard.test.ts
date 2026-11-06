@@ -181,3 +181,15 @@ it("blocks requests when the kill switch is on", async () => {
   const result = await guard(new Request("https://worker.test/topup", { method: "POST" }), env, () => {});
   expect(result.ok ? 200 : result.response.status).toBe(503);
 });
+
+it("checks the spend cap without a write, and survives KV refusing a same-second write", async () => {
+  const env = testEnv();
+  const put = vi.spyOn(env.PATA_KV, "put");
+  expect(await chargeSpend(env, 0)).toBe(true);
+  expect(put).not.toHaveBeenCalled();
+  put.mockRejectedValueOnce(new Error("KV PUT failed: 429 Too Many Requests"));
+  expect(await chargeSpend(env, 1)).toBe(true);
+  expect(put).toHaveBeenCalledTimes(1);
+  // The refused increment is still counted in this instance, so the cap holds here.
+  expect(await chargeSpend(env, 2.5)).toBe(false);
+});

@@ -48,9 +48,18 @@ async function addCounter(env: Env, key: string, amount: number, cap: number, tt
     if (!Number.isFinite(stored) || stored < 0) return false;
     const value = Math.max(stored, previous?.value ?? 0) + amount;
     if (value > cap) return false;
+    // A zero amount is a check (chargeSpend(env, 0) before a model call): nothing to write.
+    if (amount === 0) return true;
     const delay = (previous?.written ?? -Infinity) + 1000 - Date.now();
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-    await env.PATA_KV.put(key, String(value), { expirationTtl: ttl });
+    try {
+      await env.PATA_KV.put(key, String(value), { expirationTtl: ttl });
+    } catch {
+      // KV allows one write per key per second, and other Worker instances can't see this one's delay,
+      // so a parallel request's write can be refused (seen as ~1 in 10 failed extractions, 2026-11-06).
+      // Counters are approximate already (P0-6); a lost increment under-counts slightly instead of
+      // failing the household's request.
+    }
     entries.set(key, { value, written: Date.now(), expires: Date.now() + ttl * 1000 });
     return true;
   });
