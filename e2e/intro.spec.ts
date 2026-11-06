@@ -57,13 +57,80 @@ test("reduced motion keeps the wordmark still and enters without an animation de
   await expect(intro).toHaveCount(0, { timeout: 200 });
 });
 
-test("a normal-motion entry opens the doorway before releasing the home screen", async ({ page }) => {
+test("entry carries the Pata wordmark into its real top-left header position", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
+  const intro = page.getByRole("dialog", { name: "Welcome to Pata" });
+  const wordmark = intro.getByRole("heading", { name: "Pata", exact: true });
+  const start = (await wordmark.boundingBox())!;
+  const target = await page.locator(".pata-header-wordmark").evaluate((node) => {
+    const { x, y, width, height } = node.getBoundingClientRect();
+    return { x, y, width, height };
+  });
   const enter = page.getByRole("button", { name: "Enter Pata" });
   await enter.click();
   await expect(enter).toBeDisabled();
+  await expect.poll(() => wordmark.evaluate((node) => node.getAnimations().length)).toBeGreaterThan(0);
+  const halfway = await wordmark.evaluate((node) => {
+    const dialog = node.closest("dialog")!;
+    dialog.getAnimations({ subtree: true }).forEach((animation) => {
+      animation.pause();
+      animation.currentTime = 450;
+    });
+    const { x, y, width } = node.getBoundingClientRect();
+    return { x, y, width, color: getComputedStyle(node).color };
+  });
+  expect(halfway.x).toBeLessThan(start.x);
+  expect(halfway.y).toBeLessThan(start.y);
+  expect(halfway.width).toBeLessThan(start.width * 0.8);
+  expect(halfway.color).toBe("rgb(31, 28, 24)");
+  const arriving = await wordmark.evaluate((node) => {
+    node
+      .closest("dialog")!
+      .getAnimations({ subtree: true })
+      .forEach((animation) => {
+        animation.currentTime = 891;
+      });
+    const { x, y, width, height } = node.getBoundingClientRect();
+    return { x, y, width, height };
+  });
+  for (const dimension of ["x", "y", "width", "height"] as const) {
+    expect(Math.abs(arriving[dimension] - target[dimension])).toBeLessThan(1);
+  }
+  await intro.evaluate((node) =>
+    node.getAnimations({ subtree: true }).forEach((animation) => animation.play()),
+  );
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".pata-header-wordmark")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your door, shared only by consent." })).toBeFocused();
+});
+
+test("reduced motion requested during entry completes the handoff and restores the header", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enter Pata" }).click();
+  const intro = page.getByRole("dialog", { name: "Welcome to Pata" });
+  await expect
+    .poll(() => intro.evaluate((node) => node.getAnimations({ subtree: true }).length))
+    .toBeGreaterThan(0);
+  await intro.evaluate((node) =>
+    node.getAnimations({ subtree: true }).forEach((animation) => animation.pause()),
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(intro).toHaveCount(0, { timeout: 300 });
+  await expect(page.locator(".pata-header-wordmark")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your door, shared only by consent." })).toBeFocused();
+});
+
+test("an unavailable animation API never blocks entry or hides the header", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(Element.prototype, "animate", { value: undefined }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enter Pata" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".pata-header-wordmark")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your door, shared only by consent." })).toBeFocused();
 });
 
 test("blocked session storage never traps the household on the intro", async ({ page }) => {

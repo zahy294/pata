@@ -25,6 +25,9 @@
   gap: 24px;
 }
 .pata-header-wordmark {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: -0.04em;
+  line-height: 1;
   font-size: 28px;
 }
 .pata-app-content {

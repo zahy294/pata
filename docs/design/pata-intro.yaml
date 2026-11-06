@@ -1,8 +1,8 @@
 # Scoped Hue model for the approved intro, not a replacement for the app's design system.
-name: Pata doorway
+name: Pata wordmark handoff
 reference: https://www.instagram.com/p/De1gtsHD0zB/
 observed: Warm cream, oversized editorial lettering, fine rules; caption discusses transitions.
-limitation: Exact video motion unavailable; user approved a Pata-specific doorway interpretation.
+limitation: Original Instagram video unavailable. Later steering uses the supplied Swiggy recording and explicit top-left wordmark handoff.
 steering: App icon uses the bottom-right green tile reference. Intro uses only normal cream Pata lettering, no chrome finish.
 voice: Warm, direct, household-led.
 colors:
@@ -25,7 +25,7 @@ hero_stage:
   form: Oversized cream Pata lettering inside a fine doorway outline.
   relation: flat
   medium: absent
-  motion: Entry interaction only; no pointer requirement on phones.
+  motion: The same Pata lettering travels into the real top-left app header; the surface separates from its center.
 intro_content:
   topLeft: Landscape app icon
   topRight: पता
@@ -41,11 +41,19 @@ responsive_layout:
   laptopPanels: Side by side when parallel; reading and form widths stay bounded
   phonePanels: Stacked, with consistent outer gutters
 motion:
-  doorDurationMs: 760
-  doorDelayMs: 80
-  completionFallbackMs: 950
-  easing: cubic-bezier(0.76, 0, 0.24, 1)
-  reduced: Instant entry; text is always still.
+  wordmarkDurationMs: 900
+  surfaceDurationMs: 820
+  surfaceStaggerMs: [0, 20, 40]
+  peripheralExitMs: 380
+  colorDurationMs: 200
+  colorDelayMs: 90
+  completionFallbackMs: 1200
+  easing: cubic-bezier(0.65, 0, 0.2, 1)
+  destination: Measured bounds of .pata-header-wordmark, matching Georgia, weight, tracking and line-height
+  surface: Eight green geometric sectors separate outward from the source wordmark center
+  continuity: Same visible wordmark throughout; only the destination text is hidden during flight
+  reduced: Instant entry, including when the preference changes mid-flight
+  interruption: Escape, resize or unavailable animation APIs finish immediately and restore header text
 page_reveal:
   durationMs: 300
   easing: cubic-bezier(0.16, 1, 0.3, 1)
