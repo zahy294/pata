@@ -54,8 +54,9 @@ export default function PinPicker({
 
   const bboxCenter = useMemo<LatLon>(
     () => ({
-      lat: (bbox[0] + bbox[2]) / 2,
-      lon: (bbox[1] + bbox[3]) / 2,
+      // bbox is [west, south, east, north] (shared/api.ts RankResponse, map/config.ts).
+      lat: (bbox[1] + bbox[3]) / 2,
+      lon: (bbox[0] + bbox[2]) / 2,
     }),
     [bbox],
   );

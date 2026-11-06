@@ -12,8 +12,8 @@ import { ARKIV_MAX_DAYS, GRANT_LATENCY_MARGIN_SECONDS } from "../../../shared/co
 import { LANGUAGES, type GrantRequest, type Language } from "../../../shared/domain";
 import type { HouseholdKeys } from "../../lib/keys";
 import type { HouseholdState } from "../../lib/keys/store";
-import type { ApprovedGrant } from "../../lib/flows/approve-grant";
-import * as flows from "../../lib/flows/fake";
+import { approveGrant, loadHousehold, type ApprovedGrant } from "../../lib/flows/approve-grant";
+import { signIn } from "../../lib/flows/setup-household";
 
 const LANGUAGE_NAME: Record<Language, string> = {
   hi: "Hindi (हिंदी)",
@@ -148,6 +148,7 @@ export default function ApprovePage() {
   const [keys, setKeys] = useState<HouseholdKeys | null>(null);
   const [household, setHousehold] = useState<HouseholdState | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [noHousehold, setNoHousehold] = useState(false);
 
   const [rawHashPresent, setRawHashPresent] = useState(false);
   const [request, setRequest] = useState<GrantRequest | null>(null);
@@ -188,12 +189,10 @@ export default function ApprovePage() {
   const boot = async () => {
     setBootError(null);
     try {
-      const [k, state] = await Promise.all([
-        flows.signIn(),
-        flows.loadOrDefaultHouseholdState(),
-      ]);
+      const [k, state] = await Promise.all([signIn(), loadHousehold()]);
       setKeys(k);
       setHousehold(state);
+      setNoHousehold(state === null);
     } catch {
       setBootError("Could not load your home's keys on this device.");
     }
@@ -238,7 +237,7 @@ export default function ApprovePage() {
     setApproving(true);
     setApproveError(null);
     try {
-      const result = await flows.approveGrant(keys, household, request);
+      const result = await approveGrant(keys, household, request);
       setApproved(result);
     } catch {
       setApproveError(
@@ -275,7 +274,7 @@ export default function ApprovePage() {
       {/* Header */}
       <div className="flex flex-col gap-1">
         <span className="inline-flex self-start items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
-          {approved ? "Single-Use Token Ready" : "Door Access Consent"}
+          {approved ? "Courier Link Ready" : "Door Access Consent"}
         </span>
         <h1 className="mt-1 font-serif text-2xl font-bold tracking-tight text-[#1F1C18]">
           {approved
@@ -284,7 +283,7 @@ export default function ApprovePage() {
         </h1>
         <p className="text-sm text-[#6E655A]">
           {approved
-            ? "One-time digital pass for your delivery partner."
+            ? "Anyone with this link can find your door until it ends."
             : "Review who is asking and how long they can see your exact door."}
         </p>
       </div>
@@ -300,6 +299,24 @@ export default function ApprovePage() {
             Retry
           </button>
         </div>
+      )}
+
+      {noHousehold && (
+        <section
+          role="alert"
+          className="flex flex-col gap-2.5 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4 shadow-xs"
+        >
+          <h2 className="text-sm font-bold text-[#1F1C18]">Set up your home first</h2>
+          <p className="text-xs leading-relaxed text-[#6E655A]">
+            This phone has no home yet, so there is no door to share.
+          </p>
+          <a
+            href="/setup"
+            className="self-start rounded-lg bg-[#046A38] px-3 py-1.5 text-xs font-semibold text-[#FFFDF9]"
+          >
+            Set up my home
+          </a>
+        </section>
       )}
 
       {/* Malformed #fragment warning */}
@@ -332,7 +349,7 @@ export default function ApprovePage() {
                   Your Home&apos;s Name
                 </p>
                 <p className="font-mono text-sm font-bold text-[#1F1C18]">
-                  {household?.name ?? "blue-gate.pata.eth"}
+                  {household?.name ?? "—"}
                 </p>
               </div>
             </div>
@@ -469,7 +486,7 @@ export default function ApprovePage() {
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#D8CCB8] bg-[#FAF5EC] py-5">
             <QrCode value={approved.courierLink} size={216} />
             <p className="mt-2.5 text-xs font-medium text-[#6E655A]">
-              Scan to open live turn-by-turn voice directions
+              Scan to open the door directions while the link is live
             </p>
           </div>
 

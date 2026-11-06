@@ -9,4 +9,4 @@ export const DEMO_BBOX: [number, number, number, number] = [72.835, 19.025, 72.8
 export const PMTILES_URL = "/maps/mumbai-demo.pmtiles";
 
 export const ATTRIBUTION =
-  '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
+  '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://openstreetmap.org">OpenStreetMap</a>';

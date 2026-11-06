@@ -12,12 +12,14 @@ import { useEffect, useState } from "react";
 import MapView from "../../components/MapView";
 import AudioPlayer from "../../components/AudioPlayer";
 import { formatDigipin } from "../../lib/digipin";
-import type { CourierView } from "../../lib/flows/courier";
+import { checkCourierLink, type CourierView } from "../../lib/flows/courier";
 import type { Locality } from "../../../shared/domain";
-import * as flows from "../../lib/flows/fake";
 
 const SESSION_STORAGE_KEY = "pata.courier.fragment";
 const POLL_INTERVAL_MS = 3000;
+// The registry decides liveness, so a failed check normally hides the door. Hold a live view through at
+// most this many consecutive failed checks (a brief Anon-RPC hiccup), and never past the grant's end.
+const MAX_HELD_CHECKS = 2;
 
 export default function CourierPage() {
   const [view, setView] = useState<CourierView>({
@@ -32,22 +34,28 @@ export default function CourierPage() {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     let fragment = "";
-    try {
-      const hash = window.location.hash;
-      if (hash && hash.length > 1) {
-        fragment = hash;
-        window.sessionStorage.setItem(SESSION_STORAGE_KEY, hash);
-        window.history.replaceState(
-          null,
-          "",
-          window.location.pathname + window.location.search,
-        );
-      } else {
-        fragment = window.sessionStorage.getItem(SESSION_STORAGE_KEY) ?? "";
+    const hash = window.location.hash;
+    if (hash && hash.length > 1) {
+      fragment = hash;
+      // Remove the bearer secret from the address bar first, even if storage is unavailable.
+      try {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      } catch {
+        // ignore: nothing else to do without history access
       }
-    } catch {
-      fragment = window.location.hash ?? "";
+      try {
+        window.sessionStorage.setItem(SESSION_STORAGE_KEY, hash);
+      } catch {
+        // ignore: the link still works for this page load
+      }
+    } else {
+      try {
+        fragment = window.sessionStorage.getItem(SESSION_STORAGE_KEY) ?? "";
+      } catch {
+        fragment = "";
+      }
     }
+    let failedChecks = 0;
 
     if (!fragment) {
       setView({ state: "invalid" });
@@ -56,22 +64,28 @@ export default function CourierPage() {
 
     const poll = async () => {
       try {
-        const result = await flows.checkCourierLink(fragment);
+        const result = await checkCourierLink(fragment);
         if (!active) return;
 
         if ("locality" in result && result.locality) {
           setKnownLocality(result.locality);
         }
 
-        setView(result);
+        failedChecks = result.state === "checking" ? failedChecks + 1 : 0;
+        setView((previous) =>
+          result.state === "checking" &&
+          previous.state === "live" &&
+          failedChecks <= MAX_HELD_CHECKS &&
+          Date.now() / 1000 < previous.payload.grantEnd
+            ? previous
+            : result,
+        );
 
         if (result.state === "ended" || result.state === "invalid") {
-          if (result.state === "ended") {
-            try {
-              window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
-            } catch {
-              // ignore storage errors
-            }
+          try {
+            window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+          } catch {
+            // ignore storage errors
           }
           if (timer) {
             clearInterval(timer);
@@ -170,8 +184,8 @@ export default function CourierPage() {
                 This link has ended
               </p>
               <p className="mt-1 text-xs leading-relaxed text-[#6E655A]">
-                Exact door details and voice directions have been locked. Only
-                the public neighbourhood locality is shown above.
+                This page no longer shows the door details or directions. Only the
+                public neighbourhood locality is shown above.
               </p>
             </div>
           </div>

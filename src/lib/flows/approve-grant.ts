@@ -85,3 +85,6 @@ export async function approveGrant(
     identity = null;
   }
 }
+
+/** The consent screen's household on this phone; null means "set up your home first". */
+export { loadHouseholdState as loadHousehold } from "../keys/store";
