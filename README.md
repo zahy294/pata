@@ -89,16 +89,18 @@ P0-2 records `isEmancipated() = true`. The irreversible parent subregistry-point
 
 ## AI use
 
-Attribution comes from reachable `git log --grep "AI:"` commit bodies and changed paths; untagged work is not assumed human-written.
+Attribution combines reachable `git log --grep "AI:"` commit bodies and changed paths with the owner's record of early Claude Code work. Untagged work is not assumed human-written.
 
-| Tool | Files and parts evidenced by trailers |
+Commits before 2026-11-06 ~04:00 IST may lack AI trailers; this section is the complete record.
+
+| Tool | Files and parts assisted |
 | --- | --- |
 | Codex | `src/lib/keys/`, `src/lib/seal/`, `src/lib/rpc/`: identities, storage, encryption, RPC and tests. `src/lib/digipin/`, `shared/geo.ts`, `server/src/geo/`: encoding, geometry, map adapters and tests. Worker guard/router/relay and topup/register routes, `src/lib/server-client/{signed,index}`, `scripts/smoke-worker*`: protected server calls and checks. Associated plans and this README/Arkiv prose are AI-written or AI-edited. |
-| Claude Code | `scripts/register-parent-names.mjs`, `scripts/lock-pata.mjs`, `scripts/fund-relay.mjs`: parent deployment, registration wait/retry and funding scripts (`066f311`, `5b1b6c9`, `dbfcd1f`). |
+| Claude Code | **Before kick-off, planning and research written under the owner's direction:** `idea.md`, `research.md`, `docs/research/*`, `docs/adr/0001`–`0007`, `GLOSSARY.md`, `SETUP.md`, `docs/plan.md`, `docs/tickets.md`.<br>**P0-1 scaffold and interfaces:** Next.js/Foundry/Worker setup; `shared/` domain, constants and API contract; `src/lib/` and `server/src/` module stubs and signatures; screen stubs; `contracts/` resolver stub and vendored interface; the check gate; `AGENTS.md`, `docs/team/*`, `CODEOWNERS`.<br>**Owner scripts:** `scripts/env-file.mjs`, `scripts/check-env.mjs`, `scripts/balances.mjs`, `scripts/rotate-keys.mjs`, `scripts/check-names.mjs`, `scripts/register-parent-names.mjs`, `scripts/lock-pata.mjs`, `scripts/fund-relay.mjs` (including trailer-bearing `066f311`, `5b1b6c9`, `dbfcd1f`).<br>**Reviews:** code review of every merged branch. |
 
 Representative Codex commits: `90b2b61` (sealing), `6b66128` (keys), `28e7c1b` (RPC), `b689f3d` (DIGIPIN), `f90e32a` (map adapter), `d96b9cd` (relay), `58f4c46` (smoke). Unmerged home/voice code reviewed for this draft also has Codex trailers; it is not presented as integrated.
 
-People supplied the product requirements and review decisions. The owner performed account/funding/hosting setup and the parent transactions recorded in P0-2. Human phone tests, consented fieldwork, rehearsal and video narration remain planned unless recorded separately. Specs and prompts remain in [idea.md](idea.md), [research.md](research.md), [team prompts](docs/team/chain-ops-and-pitch.md) and [ticket plans](docs/plans/README.md).
+People supplied the product requirements and review decisions. The owner performed account/funding/hosting setup and the parent transactions recorded in P0-2. Human phone tests, consented fieldwork, rehearsal and video narration remain planned unless recorded separately. Specs and team guidance remain in [idea.md](idea.md), [research.md](research.md), [team guide](docs/team/README.md) and [ticket plans](docs/plans/README.md).
 
 ## Run locally
 
