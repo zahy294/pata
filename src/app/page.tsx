@@ -76,8 +76,8 @@ export default function Home() {
               No home set up on this phone yet
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-[#6E655A]">
-              Record or type how people find your door, confirm your 4m × 4m
-              DIGIPIN grid code, and pick a memorable name for your home.
+              Use your location or type how people find your door, confirm
+              your 4m × 4m DIGIPIN grid code, and pick a name for your home.
             </p>
           </div>
 
@@ -89,12 +89,18 @@ export default function Home() {
             <span aria-hidden="true">→</span>
           </Link>
 
-          <div className="border-t border-[#E6DAC6] pt-3 text-center">
+          <div className="flex justify-center gap-5 border-t border-[#E6DAC6] pt-3 text-center">
             <Link
               href="/lookup/"
               className="text-xs font-semibold text-[#6E655A] underline hover:text-[#1F1C18]"
             >
               Look up a home&apos;s name →
+            </Link>
+            <Link
+              href="/seller/"
+              className="text-xs font-semibold text-[#6E655A] underline hover:text-[#1F1C18]"
+            >
+              Demo seller →
             </Link>
           </div>
         </section>
@@ -160,6 +166,12 @@ export default function Home() {
               className="font-semibold text-[#046A38] underline"
             >
               Share a courier link
+            </Link>
+            <Link
+              href="/seller/"
+              className="font-semibold text-[#046A38] underline"
+            >
+              Demo seller
             </Link>
             <Link
               href="/lookup/"
