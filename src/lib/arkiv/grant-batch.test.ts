@@ -18,7 +18,7 @@ const payload: GrantPayload = {
   roomNumber: "Room 731",
   writtenAddress: "Test door",
   directions: "Take the test door",
-  audioMp3Base64: "AAEC/w==",
+  audioKey: `0x${"77".repeat(32)}`,
   grantEnd: 1_800_000_050,
 };
 const issued: HistoryEntry = {
@@ -55,6 +55,7 @@ it("creates one atomic grant/history batch with separate encryption recipients a
     requester: { displayName: "Courier" },
     purpose: "Test delivery",
     grantEnd: 1_800_000_050,
+    audioKey: payload.audioKey,
   });
   expect(await openJson(keys.sealKey, hexToBytes(creates[1].values.sealed.value))).toEqual(issued);
   await expect(openJson(keys.sealKey, hexToBytes(creates[0].values.payload.value))).rejects.toThrow();
@@ -88,7 +89,7 @@ it("rejects a mismatched history deadline or an oversized encrypted payload befo
     createGrantBatch(keys, identity.sealKey, payload, { ...issued, grantEnd: issued.grantEnd + 1 }),
   ).rejects.toThrow();
   await expect(
-    createGrantBatch(keys, identity.sealKey, { ...payload, audioMp3Base64: "x".repeat(128 * 1024) }, issued),
+    createGrantBatch(keys, identity.sealKey, { ...payload, writtenAddress: "x".repeat(128 * 1024) }, issued),
   ).rejects.toThrow();
   expect(rpc.executeBatch).not.toHaveBeenCalled();
 });

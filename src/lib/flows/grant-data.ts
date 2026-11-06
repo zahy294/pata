@@ -19,8 +19,8 @@ export function calculateGrantEnd(sepoliaTimestamp: number, durationSeconds: num
 export function buildGrantPayload(
   home: HomeRecord,
   request: GrantRequest,
-  /** Null when setup kept no clip in request.language (ADR 0007 text fallback). */
-  mp3: Uint8Array | null,
+  /** The grant's audio entity; null when setup kept no clip in request.language (ADR 0007 text fallback). */
+  audioKey: `0x${string}` | null,
   grantEnd: number,
 ): GrantPayload {
   if (
@@ -31,9 +31,6 @@ export function buildGrantPayload(
     grantEnd <= 0
   )
     throw new Error("Invalid grant request");
-  let binary = "";
-  for (let offset = 0; mp3 && offset < mp3.length; offset += 32_768)
-    binary += String.fromCharCode(...mp3.subarray(offset, offset + 32_768));
   return {
     version: 1,
     requester: { ...request.requester },
@@ -45,7 +42,7 @@ export function buildGrantPayload(
     roomNumber: home.roomNumber,
     writtenAddress: home.writtenAddress,
     directions: home.directions[request.language],
-    ...(mp3 ? { audioMp3Base64: btoa(binary) } : {}),
+    ...(audioKey ? { audioKey } : {}),
     grantEnd,
   };
 }

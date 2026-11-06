@@ -214,7 +214,6 @@ it.skipIf(!process.env.DEPLOYER_PRIVATE_KEY)(
         roomNumber: "Synthetic room",
         writtenAddress: "Synthetic test door",
         directions: "Synthetic test directions",
-        audioMp3Base64: "AAEC/w==",
         grantEnd: longEnd,
       };
       const issued: HistoryEntry = {

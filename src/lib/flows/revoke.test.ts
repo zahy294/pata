@@ -123,3 +123,30 @@ it("retains encrypted cleanup intent when Arkiv fails after ENS revocation", asy
   expect(io.writeContract).toHaveBeenCalledOnce();
   expect(io.createEntity).toHaveBeenCalledOnce();
 });
+it("deletes the grant's audio entity along with its payload", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const audioKey = `0x${"77".repeat(32)}` as const;
+  io.request.mockImplementation(async ({ method, params }) => {
+    if (method === "arkiv_query") return { data: [], blockNumber: "0x1" };
+    if (params?.[0] !== audioKey) return null;
+    return {
+      key: audioKey,
+      owner: keys.address,
+      creator: keys.address,
+      createdAt: "0x1",
+      updatedAt: "0x1",
+      expiresAt: "0x77f881",
+      creationFlags: 0,
+      attributes: [
+        { name: "arkiv.schema", type: "str", value: "pata.grant-audio.v1" },
+        { name: "sealed", type: "bytes", value: "0x01" },
+      ],
+      attributeSchema: [
+        { name: "arkiv.schema", type: "str", indexed: true },
+        { name: "sealed", type: "bytes", indexed: false },
+      ],
+    };
+  });
+  expect(await revokeGrant(keys, household, { ...grant, audioKey })).toBe("revoked");
+  expect(io.deleteEntity).toHaveBeenCalledWith({ entityKey: audioKey });
+});

@@ -67,7 +67,7 @@ export interface HomeRecord {
   roomNumber: string;
   writtenAddress: string;
   directions: DirectionsText;
-  /** Arkiv entity keys of the `pata.voice.v1` clips. A language without a clip falls back to speechSynthesis (ADR 0007). */
+  /** Arkiv keys of the `pata.voice.v1` AAC clips. A language without a clip falls back to speechSynthesis (ADR 0007). */
   voiceKeys: Partial<Record<Language, `0x${string}`>>;
 }
 
@@ -83,9 +83,11 @@ export interface GrantPayload {
   roomNumber: string;
   writtenAddress: string;
   directions: string;
-  /** MP3 bytes of the directions clip in `language`, base64 (at most MAX_VOICE_CLIP_BYTES raw).
-   * Absent when setup has no clip in that language: the courier view reads `directions` aloud (ADR 0007). */
-  audioMp3Base64?: string;
+  /**
+   * Arkiv key of this grant's `pata.grant-audio.v1` entity: the AAC clip in `language`, sealed to the same
+   * session key. Absent when setup has no clip in that language: the courier view reads `directions` aloud.
+   */
+  audioKey?: `0x${string}`;
   /** Unix seconds; same value as the ENS grant's expiry. */
   grantEnd: number;
 }
@@ -122,6 +124,8 @@ export interface HistoryEntry {
 export interface LiveGrant {
   grantLabel: string;
   payloadKey: `0x${string}`;
+  /** The grant's audio entity, deleted with the payload on revoke. */
+  audioKey?: `0x${string}`;
   requester: RequesterInfo;
   purpose: string;
   grantEnd: number;

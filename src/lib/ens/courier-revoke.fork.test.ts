@@ -135,7 +135,6 @@ it.skipIf(!process.env.DEPLOYER_PRIVATE_KEY)(
         roomNumber: "Test room",
         writtenAddress: "Synthetic address",
         directions: "Synthetic directions",
-        audioMp3Base64: "SUQz",
         grantEnd: at + 180,
       };
       stage = "create payload";

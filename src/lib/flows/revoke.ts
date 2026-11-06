@@ -6,7 +6,7 @@ import type { HouseholdKeys } from "../keys";
 import type { HouseholdState } from "../keys/store";
 import { loadRevocationCheckpoint, saveRevocationCheckpoint } from "../keys/store";
 import { unregisterGrant, sepoliaNow } from "../ens/grants";
-import { deleteGrantPayload, createHistoryEntry } from "../arkiv";
+import { deleteGrantPayload, deleteGrantAudio, createHistoryEntry } from "../arkiv";
 import { sealJson, openJson } from "../seal";
 import { sepoliaPublicClient } from "../rpc";
 import { userRegistryAbi } from "../ens/abis";
@@ -64,6 +64,7 @@ async function performRevoke(
     const entry = await openJson<HistoryEntry>(keys.sealKey, checkpoint.sealedHistory);
     await unregisterGrant(keys, household, entry.grantLabel);
     await deleteGrantPayload(keys, grant.payloadKey);
+    if (grant.audioKey) await deleteGrantAudio(keys, grant.audioKey);
     await createHistoryEntry(keys, entry);
     await saveRevocationCheckpoint(keys.address, grant.payloadKey, { ...checkpoint, complete: true });
     return "revoked";
