@@ -43,14 +43,13 @@ responsive_layout:
 motion:
   wordmarkDurationMs: 900
   surfaceDurationMs: 820
-  surfaceStaggerMs: [0, 20, 40]
   peripheralExitMs: 380
   colorDurationMs: 200
   colorDelayMs: 90
   completionFallbackMs: 1200
   easing: cubic-bezier(0.65, 0, 0.2, 1)
   destination: Measured bounds of .pata-header-wordmark, matching Georgia, weight, tracking and line-height
-  surface: Eight green geometric sectors separate outward from the source wordmark center
+  surface: One smooth circular aperture expands from the source wordmark center to beyond the farthest viewport corner
   continuity: Same visible wordmark throughout; only the destination text is hidden during flight
   reduced: Instant entry, including when the preference changes mid-flight
   interruption: Escape, resize or unavailable animation APIs finish immediately and restore header text

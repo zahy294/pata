@@ -100,14 +100,26 @@ test("Back and Forward retain the router's normal page history", async ({ page }
 test("turning on reduced motion cancels an active reveal", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Your door, shared only by consent." })).toBeVisible();
+  // Hold motion inside the browser as soon as it starts, before runner latency
+  // can consume the entire 300 ms reveal under parallel test load.
+  const heldReveal = page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const deadline = performance.now() + 5000;
+        const sample = () => {
+          const animations = document.querySelector(".pata-app-content")!.getAnimations({ subtree: true });
+          if (animations.length) {
+            animations.forEach((animation) => animation.pause());
+            resolve(true);
+          } else if (performance.now() < deadline) requestAnimationFrame(sample);
+          else resolve(false);
+        };
+        requestAnimationFrame(sample);
+      }),
+  );
   await page.getByRole("link", { name: "Lookup", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Look up a name" })).toBeVisible();
-  // Hold the live browser animation so natural completion cannot hide a missing cancel.
-  await page.locator(".pata-app-content").evaluate((node) => {
-    const animations = node.getAnimations({ subtree: true });
-    if (!animations.length) throw new Error("Expected an active page reveal");
-    animations.forEach((animation) => animation.pause());
-  });
+  expect(await heldReveal).toBe(true);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect
     .poll(() =>

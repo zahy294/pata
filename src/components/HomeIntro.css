@@ -30,40 +30,11 @@
 .pata-intro__surface {
   position: fixed;
   inset: 0;
-  background: var(--intro-bg);
   pointer-events: none;
 }
-.pata-intro[data-flight="true"] .pata-intro__surface {
-  background: transparent;
-}
-.pata-intro__sector {
-  position: absolute;
-  inset: 0;
-  background: var(--intro-bg);
-}
-.pata-intro__sector:nth-child(1) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 0 0, 50% 0);
-}
-.pata-intro__sector:nth-child(2) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 50% 0, 100% 0);
-}
-.pata-intro__sector:nth-child(3) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 100% 0, 100% 50%);
-}
-.pata-intro__sector:nth-child(4) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 100% 50%, 100% 100%);
-}
-.pata-intro__sector:nth-child(5) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 100% 100%, 50% 100%);
-}
-.pata-intro__sector:nth-child(6) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 50% 100%, 0 100%);
-}
-.pata-intro__sector:nth-child(7) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 0 100%, 0 50%);
-}
-.pata-intro__sector:nth-child(8) {
-  clip-path: polygon(var(--intro-origin-x, 50%) var(--intro-origin-y, 42%), 0 50%, 0 0);
+.pata-intro__aperture {
+  transform: scale(0);
+  transform-origin: 0 0;
 }
 .pata-intro__composition {
   position: relative;

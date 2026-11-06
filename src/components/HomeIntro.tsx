@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Image from "next/image";
 import "./HomeIntro.css";
 const SESSION_KEY = "pata.intro.seen.v1";
@@ -26,6 +26,8 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const homeRef = useRef<HTMLDivElement>(null);
   const wordmarkRef = useRef<HTMLHeadingElement>(null);
+  const apertureRef = useRef<SVGCircleElement>(null);
+  const maskId = useId();
   const stopMotion = useRef<(() => void) | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reducedMotion = useRef(false);
@@ -55,8 +57,9 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
     const frame = requestAnimationFrame(() => {
       const wordmark = wordmarkRef.current;
       const dialog = dialogRef.current;
+      const aperture = apertureRef.current;
       const target = document.querySelector<HTMLElement>(".pata-header-wordmark");
-      if (!wordmark || !dialog || !target || !wordmark.animate || reducedMotion.current) {
+      if (!wordmark || !dialog || !aperture || !target || !wordmark.animate || reducedMotion.current) {
         finish();
         return;
       }
@@ -84,9 +87,6 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
         const scale = to.width / from.width;
         const originX = from.left + from.width / 2;
         const originY = from.top + from.height / 2;
-        dialog.style.setProperty("--intro-origin-x", `${originX}px`);
-        dialog.style.setProperty("--intro-origin-y", `${originY}px`);
-        dialog.dataset.flight = "true";
         Object.assign(wordmark.style, {
           position: "fixed",
           left: `${from.left}px`,
@@ -133,32 +133,19 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
               easing: "ease-out",
             }),
           );
-        const directions = [
-          [-1, -1],
-          [1, -1],
-          [1, -0.35],
-          [1, 1],
-          [0.35, 1],
-          [-1, 1],
-          [-1, 0.35],
-          [-1, -0.35],
-        ];
-        dialog.querySelectorAll<HTMLElement>(".pata-intro__sector").forEach((sector, i) => {
-          const [dx, dy] = directions[i];
-          animations.push(
-            sector.animate(
-              [
-                { transform: "translate(0,0)", opacity: 1 },
-                { opacity: 1, offset: 0.3 },
-                {
-                  transform: `translate(${dx * innerWidth * 0.85}px,${dy * innerHeight * 0.85}px)`,
-                  opacity: 0,
-                },
-              ],
-              { ...timing, duration: 820, delay: (i % 3) * 20 },
-            ),
-          );
-        });
+        // A black circle cuts one continuous hole out of the green luminance mask.
+        // Reach the farthest corner even when the wordmark is off-center.
+        const radius =
+          Math.hypot(Math.max(originX, innerWidth - originX), Math.max(originY, innerHeight - originY)) + 2;
+        animations.push(
+          aperture.animate(
+            [
+              { transform: `translate(${originX}px, ${originY}px) scale(0)` },
+              { transform: `translate(${originX}px, ${originY}px) scale(${radius})` },
+            ],
+            { ...timing, duration: 820 },
+          ),
+        );
         for (const [selector, transform] of [
           [".pata-intro__logo", "translate(-48px,-80px)"],
           [".pata-intro__hindi", "translate(48px,-80px)"],
@@ -243,11 +230,24 @@ export default function HomeIntro({ children }: { children: ReactNode }) {
             enter(true);
           }}
         >
-          <div className="pata-intro__surface" aria-hidden="true">
-            {Array.from({ length: 8 }, (_, index) => (
-              <div key={index} className="pata-intro__sector" />
-            ))}
-          </div>
+          <svg className="pata-intro__surface" width="100%" height="100%" aria-hidden="true">
+            <defs>
+              <mask
+                id={maskId}
+                maskUnits="userSpaceOnUse"
+                maskContentUnits="userSpaceOnUse"
+                x="0"
+                y="0"
+                width="100%"
+                height="100%"
+                style={{ maskType: "luminance" }}
+              >
+                <rect width="100%" height="100%" fill="white" />
+                <circle ref={apertureRef} className="pata-intro__aperture" cx="0" cy="0" r="1" fill="black" />
+              </mask>
+            </defs>
+            <rect width="100%" height="100%" fill="var(--intro-bg)" mask={`url(#${maskId})`} />
+          </svg>
           <div className="pata-intro__composition">
             <div className="pata-intro__masthead">
               <Image

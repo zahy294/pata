@@ -105,6 +105,49 @@ test("entry carries the Pata wordmark into its real top-left header position", a
   await expect(page.getByRole("heading", { name: "Your door, shared only by consent." })).toBeFocused();
 });
 
+test("the intro opens in one smooth circle from the original wordmark center", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const intro = page.getByRole("dialog", { name: "Welcome to Pata" });
+  const source = (await intro.getByRole("heading", { name: "Pata", exact: true }).boundingBox())!;
+  await expect(intro.locator("mask circle")).toHaveCount(1);
+  await page.getByRole("button", { name: "Enter Pata" }).click();
+  await expect
+    .poll(() => intro.locator("mask circle").evaluate((node) => node.getAnimations().length))
+    .toBeGreaterThan(0);
+  const sample = (time: number) =>
+    intro.evaluate((node, time) => {
+      node.getAnimations({ subtree: true }).forEach((animation) => {
+        animation.pause();
+        animation.currentTime = time;
+      });
+      const circle = node.querySelector<SVGCircleElement>("mask circle")!;
+      const matrix = circle.getCTM()!;
+      return { x: matrix.e, y: matrix.f, radius: circle.r.baseVal.value * Math.hypot(matrix.a, matrix.b) };
+    }, time);
+  const initial = await sample(0);
+  expect(initial.radius).toBeLessThan(1);
+  expect(Math.abs(initial.x - source.x - source.width / 2)).toBeLessThan(1);
+  expect(Math.abs(initial.y - source.y - source.height / 2)).toBeLessThan(1);
+  const middle = await sample(400);
+  const final = await sample(820);
+  expect(middle.radius).toBeGreaterThan(1);
+  expect(final.radius).toBeGreaterThan(middle.radius);
+  const { width, height } = page.viewportSize()!;
+  for (const [x, y] of [
+    [0, 0],
+    [width, 0],
+    [0, height],
+    [width, height],
+  ]) {
+    expect(Math.hypot(x - final.x, y - final.y)).toBeLessThan(final.radius);
+  }
+  await intro.evaluate((node) =>
+    node.getAnimations({ subtree: true }).forEach((animation) => animation.play()),
+  );
+  await expect(intro).toHaveCount(0);
+});
+
 test("reduced motion requested during entry completes the handoff and restores the header", async ({
   page,
 }) => {
