@@ -3,7 +3,7 @@
 // Pattern (nextjs-pwa.md): this wrapper does dynamic(() => import("./MapViewInner"), { ssr: false }),
 // because MapLibre needs `window`. MapViewInner registers the pmtiles protocol, uses @protomaps/basemaps
 // for the style, calls setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url)),
-// clamps to DEMO_BBOX and shows ATTRIBUTION (src/lib/map/config.ts).
+// starts at DEMO_BBOX's centre (no clamp: the tiles are worldwide) and shows ATTRIBUTION (src/lib/map/config.ts).
 import dynamic from "next/dynamic";
 import type { MapViewProps } from "./MapViewInner";
 

@@ -16,6 +16,8 @@ export interface MapViewProps {
   center?: LatLon;
   pins?: { point: LatLon; label: string; draggable?: boolean }[];
   onPinMoved?: (index: number, point: LatLon) => void;
+  /** A tap on the map itself (not on a pin): the pin picker moves the active pin there. */
+  onMapClick?: (point: LatLon) => void;
   bbox?: [number, number, number, number];
 }
 
@@ -36,11 +38,16 @@ export default function MapViewInner({
   center,
   pins,
   onPinMoved,
+  onMapClick,
   bbox,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -68,16 +75,17 @@ export default function MapViewInner({
       zoom: 14,
       minZoom: 11,
       maxZoom: 19,
-      maxBounds: [
-        [DEMO_BBOX[0], DEMO_BBOX[1]],
-        [DEMO_BBOX[2], DEMO_BBOX[3]],
-      ],
+      // No maxBounds: tiles come from OpenFreeMap worldwide, and clamping to the demo box hid the pin for
+      // any home outside Dharavi/BKC.
       attributionControl: {
         customAttribution: ATTRIBUTION,
       },
     });
 
     mapRef.current = map;
+    map.on("click", (event) => {
+      onMapClickRef.current?.({ lat: event.lngLat.lat, lon: event.lngLat.lng });
+    });
 
     return () => {
       map.remove();
@@ -85,23 +93,27 @@ export default function MapViewInner({
     };
   }, []);
 
-  // Update center or fit to bbox
+  // Fit the locality once per bbox, and follow the pin without undoing the household's zoom. (One effect
+  // for both re-fitted the whole locality after every drag, so a precise placement snapped back out.)
+  const bboxKey = bbox?.join(",");
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
-
-    if (bbox) {
-      map.fitBounds(
-        [
-          [bbox[0], bbox[1]],
-          [bbox[2], bbox[3]],
-        ],
-        { padding: 30, maxZoom: 16 },
-      );
-    } else if (center) {
-      map.flyTo({ center: [center.lon, center.lat], zoom: 15 });
-    }
-  }, [center, bbox]);
+    if (!map || !bbox) return;
+    map.fitBounds(
+      [
+        [bbox[0], bbox[1]],
+        [bbox[2], bbox[3]],
+      ],
+      { padding: 30, maxZoom: 16 },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bboxKey]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !center || bbox) return;
+    map.easeTo({ center: [center.lon, center.lat], zoom: Math.max(map.getZoom(), 15) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center?.lat, center?.lon]);
 
   // Update markers
   useEffect(() => {
