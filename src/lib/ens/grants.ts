@@ -8,12 +8,13 @@ import type { HouseholdContracts } from "./household";
 import type { HouseholdKeys } from "../keys";
 import { sepoliaPublicClient, sepoliaWalletClient } from "../rpc";
 import { sepolia } from "viem/chains";
-import { zeroAddress, BaseError, ContractFunctionRevertedError, isAddress } from "viem";
+import { zeroAddress, BaseError, ContractFunctionRevertedError, isAddress, labelhash } from "viem";
 import { GRANT_LATENCY_MARGIN_SECONDS } from "../../../shared/constants";
 import { userRegistryAbi } from "./abis";
 import { GRANT_ROLES } from "./roles";
+import { householdOwner } from "./lookup";
 
-export type GrantStatus = { live: true; owner: `0x${string}`; expiry: number } | { live: false };
+export type GrantStatus = { live: true; owner: `0x${string}` } | { live: false };
 
 export async function mintGrant(
   keys: HouseholdKeys,
@@ -78,8 +79,10 @@ export async function mintGrant(
 
 /** From the full grant name alone (courier view): UniversalHelper.findExactOwner; zero means not live. */
 export async function grantStatusByName(grantName: string): Promise<GrantStatus> {
-  void grantName;
-  throw new Error("grantStatusByName: not implemented (P0-11)");
+  try {
+    const owner = await householdOwner(grantName);
+    return owner ? { live: true, owner } : { live: false };
+  } catch { throw new Error("Could not read grant status"); }
 }
 
 /** Status read, then unregister if live. Returns "already-ended" without a transaction otherwise. */
@@ -88,10 +91,26 @@ export async function unregisterGrant(
   contracts: HouseholdContracts,
   label: string,
 ): Promise<"revoked" | "already-ended"> {
-  void keys;
-  void contracts;
-  void label;
-  throw new Error("unregisterGrant: not implemented (P0-12)");
+  try {
+    if (!/^[a-z2-7]{8}$/.test(label)) throw new Error("Invalid grant label");
+    const client = sepoliaPublicClient();
+    const id = BigInt(labelhash(label));
+    const status = await client.readContract({ address: contracts.grantRegistry,
+      abi: userRegistryAbi, functionName: "getStatus", args: [id] });
+    if (status !== 2) return "already-ended";
+    const request = { chain: sepolia, account: keys.account, address: contracts.grantRegistry,
+      abi: userRegistryAbi, functionName: "unregister" as const, args: [id] as const };
+    const hash = await sepoliaWalletClient(keys.account).writeContract(request);
+    const receipt = await client.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") { await client.simulateContract(request); throw new Error("Reverted"); }
+    return "revoked";
+  } catch (error) {
+    const reverted = error instanceof BaseError
+      ? error.walk(cause => cause instanceof ContractFunctionRevertedError) : undefined;
+    if (reverted instanceof ContractFunctionRevertedError && reverted.data?.errorName === "LabelExpired")
+      return "already-ended";
+    throw new Error("Could not unregister grant");
+  }
 }
 
 /** Latest Sepolia block timestamp, for computing grantEnd. */

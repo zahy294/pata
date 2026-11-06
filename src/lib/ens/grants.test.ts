@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { deriveHouseholdKeys } from "../keys";
-import { mintGrant, sepoliaNow } from "./grants";
+import { mintGrant, sepoliaNow, unregisterGrant } from "./grants";
 import { ContractFunctionRevertedError, encodeErrorResult, parseAbi } from "viem";
 const errorAbi = parseAbi(["error CannotSetPastExpiry(uint64 expiry)"]);
 function expired() {
@@ -12,6 +12,7 @@ function expired() {
 }
 
 const rpc = vi.hoisted(() => ({
+  readContract: vi.fn(),
   getBlock: vi.fn(),
   writeContract: vi.fn(),
   waitForTransactionReceipt: vi.fn(),
@@ -23,11 +24,32 @@ const contracts = {
   grantRegistry: "0x3333333333333333333333333333333333333333",
 } as const;
 const owner = "0x4444444444444444444444444444444444444444";
+it("treats a decoded LabelExpired race as ended without swallowing unrelated failures", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  rpc.readContract.mockResolvedValue(2);
+  const abi = parseAbi(["error LabelExpired(uint256 tokenId)"]);
+  rpc.writeContract.mockRejectedValueOnce(new ContractFunctionRevertedError({ abi, functionName: "unregister",
+    data: encodeErrorResult({ abi, errorName: "LabelExpired", args: [1n] }) }));
+  expect(await unregisterGrant(keys, contracts, "abcdefgh")).toBe("already-ended");
+  rpc.writeContract.mockRejectedValueOnce(new Error("LabelExpired secret request"));
+  await expect(unregisterGrant(keys, contracts, "abcdefgh")).rejects.toThrow(/^Could not unregister grant$/);
+});
 beforeEach(() => {
   vi.resetAllMocks();
   rpc.getBlock.mockResolvedValue({ timestamp: 1000n });
   rpc.writeContract.mockResolvedValue("0x01");
   rpc.waitForTransactionReceipt.mockResolvedValue({ status: "success" });
+});
+it("unregisters a live label by labelhash, but sends nothing for an ended label", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  rpc.readContract.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+  expect(await unregisterGrant(keys, contracts, "abcdefgh")).toBe("revoked");
+  expect(rpc.writeContract).toHaveBeenCalledWith(expect.objectContaining({
+    functionName: "unregister", address: contracts.grantRegistry,
+    args: [BigInt("0x48624fa43c68d5c552855a4e2919e74645f683f5384f72b5b051b71ea41d4f2d")],
+  }));
+  expect(await unregisterGrant(keys, contracts, "abcdefgh")).toBe("already-ended");
+  expect(rpc.writeContract).toHaveBeenCalledTimes(1);
 });
 
 it("reads time from the latest Sepolia block", async () => {
