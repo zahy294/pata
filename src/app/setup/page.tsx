@@ -48,10 +48,6 @@ const QUICK_CHIPS = [
   "2nd floor staircase",
 ];
 
-const EMPTY_CLIP = new Uint8Array([
-  0xff, 0xf3, 0x48, 0xc4, 0x00, 0x00, 0x00, 0x03, 0x48, 0x00, 0x00, 0x00,
-]);
-
 export default function SetupPage() {
   const router = useRouter();
 
@@ -100,7 +96,7 @@ export default function SetupPage() {
   const [suggestedLabel, setSuggestedLabel] = useState("");
   const [labelInput, setLabelInput] = useState("");
   const [availabilityStatus, setAvailabilityStatus] = useState<
-    "idle" | "checking" | "available" | "taken" | "error"
+    "idle" | "checking" | "available" | "taken" | "invalid" | "error"
   >("idle");
 
   // Step 7: Create household
@@ -263,13 +259,13 @@ export default function SetupPage() {
   const checkAvailability = async (candidateLabel: string) => {
     const normalized = candidateLabel.trim().toLowerCase();
     if (!flows.isValidHouseholdLabel(normalized)) {
-      setAvailabilityStatus("idle");
+      setAvailabilityStatus("invalid");
       return;
     }
     setAvailabilityStatus("checking");
     try {
-      const status = await flows.householdLabelStatus(normalized);
-      setAvailabilityStatus(status === 0 ? "available" : "taken");
+      const status = await flows.checkHouseholdName(normalized);
+      setAvailabilityStatus(status);
     } catch {
       setAvailabilityStatus("error");
     }
@@ -279,7 +275,7 @@ export default function SetupPage() {
     if (screen !== "name") return;
     const normalized = labelInput.trim().toLowerCase();
     if (!flows.isValidHouseholdLabel(normalized)) {
-      setAvailabilityStatus("idle");
+      setAvailabilityStatus("invalid");
       return;
     }
     const timer = setTimeout(() => {
@@ -313,11 +309,7 @@ export default function SetupPage() {
           roomNumber: roomNumber.trim(),
           writtenAddress: wayToTheDoor,
           directions,
-          voiceClips: {
-            hi: voiceClips.hi ?? EMPTY_CLIP,
-            mr: voiceClips.mr ?? EMPTY_CLIP,
-            en: voiceClips.en ?? EMPTY_CLIP,
-          },
+          voiceClips,
           candidates,
         },
         (step) => {
@@ -887,7 +879,7 @@ export default function SetupPage() {
               <span className="text-[#6E655A]">
                 3–32 lowercase letters, numbers, or single hyphens
               </span>
-              {!isLabelValid ? (
+              {!isLabelValid || availabilityStatus === "invalid" ? (
                 <span className="font-semibold text-[#8A2522]">
                   Invalid format
                 </span>

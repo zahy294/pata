@@ -166,7 +166,6 @@ export async function makeDirections(
 ): Promise<{
   directions: DirectionsText;
   clips: Partial<Record<Language, Uint8Array>>;
-  voiceKeys: Record<Language, `0x${string}`>;
 }> {
   void keys;
   void confirmedPin;
@@ -192,11 +191,6 @@ export async function makeDirections(
       hi: dummyMp3,
       mr: dummyMp3,
       en: dummyMp3,
-    },
-    voiceKeys: {
-      hi: "0x1111111111111111111111111111111111111111111111111111111111111111",
-      mr: "0x2222222222222222222222222222222222222222222222222222222222222222",
-      en: "0x3333333333333333333333333333333333333333333333333333333333333333",
     },
   };
 }
@@ -370,7 +364,6 @@ export async function checkCourierLink(
       "Opposite Hanuman Mandir, Kumbharwada Lane 4, blue gate, Dharavi 400017",
     directions:
       "हनुमान मंदिर के सामने नीले गेट से अंदर आएं और दूसरी सीढ़ी चढ़ें।",
-    audioMp3Base64: "",
     grantEnd,
   };
 
