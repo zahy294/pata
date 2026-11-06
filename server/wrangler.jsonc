@@ -9,6 +9,12 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// Run the Worker in the US (Placement Hints). Anthropic refused the Worker's outbound calls with 403
+	// "forbidden" from some Cloudflare locations: every call from the owner's phone on 2026-11-06, about
+	// 1 in 7 from SIN. Requests still enter at the nearest edge and are forwarded here.
+	"placement": {
+		"region": "aws:us-east-1"
+	},
 	// Invariant: the address and speech routes never log request bodies. Workers Logs stay off.
 	"observability": {
 		"enabled": false
