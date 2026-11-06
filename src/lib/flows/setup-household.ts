@@ -13,7 +13,9 @@ import type {
 } from "../../../shared/domain";
 import type { RankResponse } from "../../../shared/api";
 import type { HouseholdKeys } from "../keys";
-import type { HouseholdState } from "../keys/store";
+import type { HouseholdState, SetupCheckpoint } from "../keys/store";
+import { LANGUAGES } from "../../../shared/domain";
+import { toHex } from "viem";
 import { deriveHouseholdKeys, newRandomRoot } from "../keys";
 import { loadDeviceRoot, saveDeviceRoot } from "../keys/store";
 import { withDeviceLock } from "../keys/device-lock";
@@ -22,7 +24,8 @@ import { deployHouseholdContracts } from "../ens/household";
 import { dnsEncode, isValidHouseholdLabel } from "../ens/names";
 import { universalHelperAbi } from "../ens/abis";
 import { sepoliaPublicClient, arkivPublicClient } from "../rpc";
-import { createHomeRecord } from "../arkiv";
+import { createHomeRecord, createVoiceRecord } from "../arkiv";
+import { canonicalJson } from "../arkiv/reuse";
 import { encodeDigipin } from "../digipin";
 import { saveHouseholdState, loadSetupCheckpoint, saveSetupCheckpoint } from "../keys/store";
 import { sealJson, openJson } from "../seal";
@@ -88,13 +91,21 @@ export interface NewHousehold {
   roomNumber: string;
   writtenAddress: string;
   directions: DirectionsText;
-  voiceKeys: Record<Language, `0x${string}`>;
+  voiceClips: Record<Language, Uint8Array>;
   candidates: CandidatePin[];
 }
 
 /** Steps 6–8: topup, factory deploys, /register, locality record, sealed home record. */
 export type SetupStep =
-  "topup-sepolia" | "topup-arkiv" | "deploy" | "register" | "resolve" | "home-record" | "save" | "complete";
+  | "topup-sepolia"
+  | "topup-arkiv"
+  | "deploy"
+  | "register"
+  | "resolve"
+  | "voice-records"
+  | "home-record"
+  | "save"
+  | "complete";
 
 async function confirmTransaction(chain: "sepolia" | "arkiv", hash: `0x${string}`): Promise<boolean> {
   try {
@@ -159,7 +170,14 @@ export async function createHousehold(
     )
       throw new Error("Invalid household details");
     const name = `${input.label}.${PROVIDER_NAME}`;
-    const home: HomeRecord = {
+    for (const language of LANGUAGES) {
+      if (
+        !(input.voiceClips?.[language] instanceof Uint8Array) ||
+        input.voiceClips[language].byteLength + 29 > ARKIV_MAX_BYTES
+      )
+        throw new Error("Invalid or oversized voice clip");
+    }
+    const homeDraft: Omit<HomeRecord, "voiceKeys"> = {
       version: 1,
       digipin: encodeDigipin(input.confirmedPin),
       pin: input.confirmedPin,
@@ -167,20 +185,37 @@ export async function createHousehold(
       roomNumber: input.roomNumber,
       writtenAddress: input.writtenAddress,
       directions: input.directions,
-      voiceKeys: input.voiceKeys,
     };
+    const placeholder = toHex(new Uint8Array(32));
+    const sizedHome = { ...homeDraft, voiceKeys: { hi: placeholder, mr: placeholder, en: placeholder } };
     // Seal v1 adds one version byte, a 12-byte IV and a 16-byte authentication tag.
-    if (new TextEncoder().encode(JSON.stringify(home)).byteLength + 29 > ARKIV_MAX_BYTES)
+    if (new TextEncoder().encode(JSON.stringify(sizedHome)).byteLength + 29 > ARKIV_MAX_BYTES)
       throw new Error("Home record is too large");
-    const checkpoint = (await loadSetupCheckpoint(keys.address)) ?? {
-      name,
-      sealedHome: await sealJson(keys.sealKey, home),
+    const sealedInput = {
+      ...homeDraft,
+      voiceClips: {
+        hi: toHex(input.voiceClips.hi),
+        mr: toHex(input.voiceClips.mr),
+        en: toHex(input.voiceClips.en),
+      },
     };
-    if (
-      checkpoint.name !== name ||
-      JSON.stringify(await openJson(keys.sealKey, checkpoint.sealedHome)) !== JSON.stringify(home)
-    )
-      throw new Error("Resume setup with the original household details");
+    const checkpoint: SetupCheckpoint = (await loadSetupCheckpoint(keys.address)) ?? {
+      name,
+      inputVersion: 2,
+      sealedHome: await sealJson(keys.sealKey, sealedInput),
+    };
+    if (checkpoint.name !== name) throw new Error("Resume setup with the original household details");
+    if (checkpoint.inputVersion === 2) {
+      if (canonicalJson(await openJson(keys.sealKey, checkpoint.sealedHome)) !== canonicalJson(sealedInput))
+        throw new Error("Resume setup with the original household details");
+    } else {
+      const { voiceKeys, ...oldDraft } = await openJson<HomeRecord>(keys.sealKey, checkpoint.sealedHome);
+      if (canonicalJson(oldDraft) !== canonicalJson(homeDraft))
+        throw new Error("Resume setup with the original household details");
+      checkpoint.voiceKeys = voiceKeys;
+      checkpoint.inputVersion = 2;
+      checkpoint.sealedHome = await sealJson(keys.sealKey, sealedInput);
+    }
     const save = () => saveSetupCheckpoint(keys.address, checkpoint);
     // Old journals may retain an intent after a crash. Each remaining step reconciles
     // through the server, predicted proxy code or owner-filtered record discovery.
@@ -192,8 +227,6 @@ export async function createHousehold(
       onProgress(chain === "sepolia" ? "topup-sepolia" : "topup-arkiv");
       let fundingHash = checkpoint.fundingHashes?.[chain];
       if (!fundingHash) {
-        checkpoint.pending = chain === "sepolia" ? "topup-sepolia" : "topup-arkiv";
-        await save();
         const response = await topup(keys, { chain }).catch(async () => {
           delete checkpoint.pending;
           await save();
@@ -216,8 +249,6 @@ export async function createHousehold(
     }
     if (!checkpoint.contracts) {
       onProgress("deploy");
-      checkpoint.pending = "deploy";
-      await save();
       checkpoint.contracts = await deployHouseholdContracts(keys, name, input.locality);
       delete checkpoint.pending;
       await save();
@@ -226,8 +257,6 @@ export async function createHousehold(
     if (!checkpoint.registered) {
       onProgress("register");
       if (!checkpoint.registrationHash) {
-        checkpoint.pending = "register";
-        await save();
         const registration = await registerName(keys, { label: input.label, ...contracts }).catch(
           async () => {
             delete checkpoint.pending;
@@ -258,10 +287,25 @@ export async function createHousehold(
       checkpoint.resolved = true;
       await save();
     }
+    if (LANGUAGES.some((language) => !checkpoint.voiceKeys?.[language])) {
+      onProgress("voice-records");
+      checkpoint.voiceKeys ??= {};
+      for (const language of LANGUAGES) {
+        if (checkpoint.voiceKeys[language]) continue;
+        checkpoint.voiceKeys[language] = await createVoiceRecord(keys, language, input.voiceClips[language]);
+        await save();
+      }
+    }
+    const home: HomeRecord = {
+      ...homeDraft,
+      voiceKeys: {
+        hi: checkpoint.voiceKeys!.hi!,
+        mr: checkpoint.voiceKeys!.mr!,
+        en: checkpoint.voiceKeys!.en!,
+      },
+    };
     if (!checkpoint.homeRecordKey) {
       onProgress("home-record");
-      checkpoint.pending = "home-record";
-      await save();
       checkpoint.homeRecordKey = await createHomeRecord(keys, home);
       delete checkpoint.pending;
       await save();

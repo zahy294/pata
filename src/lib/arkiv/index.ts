@@ -66,6 +66,11 @@ export async function createVoiceRecord(
   // Language is already associated with this entity key in the sealed home record.
   void language;
   try {
+    const existing = await findSealedRecord(keys, voiceSchema, async (sealed) => {
+      const opened = await openBytes(keys.sealKey, sealed);
+      return opened.length === mp3.length && opened.every((value, index) => value === mp3[index]);
+    });
+    if (existing) return existing;
     const result = await arkivWalletClient(keys.account).createEntity(
       voiceSchema,
       { sealed: bytes(await sealBytes(keys.sealKey, mp3)) },

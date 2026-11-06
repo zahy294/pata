@@ -14,7 +14,10 @@ export interface HouseholdState {
 /** A setup journal holds exact-address input only inside household-sealed bytes. */
 export interface SetupCheckpoint {
   name: string;
+  /** Version 2 seals the home draft and MP3 bytes, rather than pre-uploaded voice keys. */
+  inputVersion?: 2;
   sealedHome: Uint8Array;
+  voiceKeys?: Partial<Record<import("../../../shared/domain").Language, `0x${string}`>>;
   sepoliaFunded?: boolean;
   arkivFunded?: boolean;
   fundingHashes?: { sepolia?: `0x${string}`; arkiv?: `0x${string}` };
@@ -23,7 +26,7 @@ export interface SetupCheckpoint {
   registered?: boolean;
   resolved?: boolean;
   homeRecordKey?: `0x${string}`;
-  /** A request may have been sent; without a returned result, never blindly replay it. */
+  /** Legacy intent only: setup clears it and reconciles before doing any new work. */
   pending?: "topup-sepolia" | "topup-arkiv" | "deploy" | "register" | "home-record";
 }
 

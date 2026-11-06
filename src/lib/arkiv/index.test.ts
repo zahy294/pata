@@ -56,6 +56,23 @@ it("finds the home after the create response is lost, without issuing another cr
   expect(network.createEntity).toHaveBeenCalledTimes(1);
 });
 
+it("recovers a voice clip after its create response is lost by matching decrypted bytes", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const clip = new Uint8Array([73, 68, 51, 99]);
+  let rows: ReturnType<typeof rpcRow>[] = [];
+  network.request.mockImplementation(async ({ params }) => {
+    expect(params[0]).toContain("pata.voice.v1");
+    return { data: rows, blockNumber: "0x1" };
+  });
+  network.createEntity.mockImplementation(async (_schema, values) => {
+    rows = [rpcRow(keys.address, "pata.voice.v1", values.sealed.value)];
+    throw new Error("lost voice response");
+  });
+  await expect(createVoiceRecord(keys, "hi", clip)).rejects.toThrow("Could not create voice record");
+  expect(await createVoiceRecord(keys, "hi", clip)).toBe(key);
+  expect(network.createEntity).toHaveBeenCalledTimes(1);
+});
+
 it("scans later pages and compares home contents independently of JSON property order", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   const reordered = Object.fromEntries(Object.entries(home).reverse());

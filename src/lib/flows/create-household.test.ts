@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { encodeAbiParameters, encodeEventTopics, hexToBytes, custom } from "viem";
 import { createPublicClient as createArkivPublicClient } from "@arkiv-network/sdk";
 import { deriveHouseholdKeys } from "../keys";
-import { openJson } from "../seal";
+import { openJson, openBytes, sealJson } from "../seal";
 import { createHousehold, type NewHousehold } from "./setup-household";
 import { ENS } from "../../../shared/constants";
 import { verifiableFactoryAbi } from "../ens/abis";
@@ -27,8 +27,6 @@ const io = vi.hoisted(() => ({
 }));
 vi.mock("../keys/store", () => io);
 vi.mock("../server-client", () => ({ topup: io.topup, registerName: io.registerName }));
-// AI/ML-owned dependency is still a stub in this checkout. Its independent canonical vector is the fixture.
-vi.mock("../digipin", () => ({ encodeDigipin: () => "39J49LL8T4" }));
 vi.mock("../rpc", () => ({
   sepoliaPublicClient: () => ({
     readContract: io.readContract,
@@ -53,7 +51,11 @@ const input: NewHousehold = {
   roomNumber: "private-room-731",
   writtenAddress: "private test address",
   directions: { en: "Private door instructions", hi: "हिंदी", mr: "मराठी" },
-  voiceKeys: { en: entityKey, hi: entityKey, mr: entityKey },
+  voiceClips: {
+    hi: new Uint8Array([73, 68, 51, 1]),
+    mr: new Uint8Array([73, 68, 51, 2]),
+    en: new Uint8Array([73, 68, 51, 3]),
+  },
   candidates: [],
 };
 let saved: unknown;
@@ -116,7 +118,7 @@ it("resumes a failed final save without deploying, registering or creating a sec
   expect(state.homeRecordKey).toBe(entityKey);
   expect(io.writeContract).toHaveBeenCalledTimes(2);
   expect(io.registerName).toHaveBeenCalledTimes(1);
-  expect(io.createEntity).toHaveBeenCalledTimes(1);
+  expect(io.createEntity).toHaveBeenCalledTimes(4);
   expect(JSON.stringify(checkpoint)).not.toContain(input.roomNumber);
 });
 
@@ -124,7 +126,8 @@ it("recovers the home entity after a lost response instead of permanently blocki
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   let rows: unknown[] = [];
   io.arkivRequest.mockImplementation(async () => ({ data: rows, blockNumber: "0x1" }));
-  io.createEntity.mockImplementation(async (_schema, values) => {
+  io.createEntity.mockImplementation(async (schema, values) => {
+    if (schema.name === "pata.voice.v1") return { entityKey };
     rows = [
       {
         key: entityKey,
@@ -139,7 +142,7 @@ it("recovers the home entity after a lost response instead of permanently blocki
   });
   await expect(createHousehold(keys, input)).rejects.toThrow();
   expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
-  expect(io.createEntity).toHaveBeenCalledTimes(1);
+  expect(io.createEntity).toHaveBeenCalledTimes(4);
   expect(saved).not.toBeNull();
 });
 
@@ -228,11 +231,11 @@ it("concurrent create calls and later repeats reuse the same home instead of dup
   const states = await Promise.all([createHousehold(keys, input), createHousehold(keys, input)]);
   expect(states[0]).toEqual(states[1]);
   expect(io.writeContract).toHaveBeenCalledTimes(2);
-  expect(io.createEntity).toHaveBeenCalledTimes(1);
+  expect(io.createEntity).toHaveBeenCalledTimes(4);
   await expect(createHousehold(keys, { ...input, roomNumber: "changed" })).rejects.toThrow(
     "original household details",
   );
-  expect(io.createEntity).toHaveBeenCalledTimes(1);
+  expect(io.createEntity).toHaveBeenCalledTimes(4);
 });
 
 it("rechecks a known funding transaction instead of requesting a second top-up after a timeout", async () => {
@@ -302,6 +305,116 @@ it("accepts an already registered household without a transaction hash and still
   expect(io.waitReceipt.mock.calls.every(([request]) => Boolean(request.hash))).toBe(true);
 });
 
+it("funds Arkiv before creating all three voice records and puts their keys in the sealed home", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const voiceClips = {
+    hi: new Uint8Array([73, 68, 51, 1]),
+    mr: new Uint8Array([73, 68, 51, 2]),
+    en: new Uint8Array([73, 68, 51, 3]),
+  };
+  let clipCount = 0;
+  io.createEntity.mockImplementation(async (schema) => {
+    if (schema.name === "pata.voice.v1") {
+      expect(io.topup.mock.calls.some(([, request]) => request.chain === "arkiv")).toBe(true);
+      return { entityKey: `0x${String(++clipCount).padStart(2, "0").repeat(32)}` };
+    }
+    expect(clipCount).toBe(3);
+    return { entityKey };
+  });
+  expect((await createHousehold(keys, { ...input, voiceClips })).homeRecordKey).toBe(entityKey);
+  expect(clipCount).toBe(3);
+  const [, values] = io.createEntity.mock.calls.find(([schema]) => schema.name === "pata.home.v1")!;
+  expect(await openJson(keys.sealKey, hexToBytes(values.sealed.value))).toMatchObject({
+    voiceKeys: { hi: `0x${"01".repeat(32)}`, mr: `0x${"02".repeat(32)}`, en: `0x${"03".repeat(32)}` },
+  });
+});
+
+it("checkpoints each language so a failed second clip does not upload the first again", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const attempts: number[] = [];
+  let failOnce = true;
+  io.createEntity.mockImplementation(async (schema, values) => {
+    if (schema.name === "pata.home.v1") return { entityKey };
+    const clip = await openBytes(keys.sealKey, hexToBytes(values.sealed.value));
+    const languageId = clip[clip.length - 1];
+    attempts.push(languageId);
+    if (languageId === 2 && failOnce) {
+      failOnce = false;
+      throw new Error("clip upload failed");
+    }
+    return { entityKey: `0x${String(languageId).padStart(2, "0").repeat(32)}` };
+  });
+  await expect(createHousehold(keys, input)).rejects.toThrow("Could not create voice record");
+  const state = await createHousehold(keys, input);
+  expect(state.homeRecordKey).toBe(entityKey);
+  expect(attempts).toEqual([1, 2, 2, 3]);
+  expect(io.topup.mock.calls.filter(([, request]) => request.chain === "arkiv")).toHaveLength(1);
+  expect(JSON.stringify(checkpoint)).not.toContain(input.roomNumber);
+});
+
+it("reuses a mined voice entity after its response is lost and finishes setup", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const rows: { key: string; owner: string; attributes: { name: string; type: string; value: string }[] }[] =
+    [];
+  io.arkivRequest.mockImplementation(async ({ params }) => ({
+    data: rows.filter((row) => params[0].includes(row.attributes[0].value)),
+    blockNumber: "0x1",
+  }));
+  let lost = false;
+  let voiceCreates = 0;
+  io.createEntity.mockImplementation(async (schema, values) => {
+    const voice = schema.name === "pata.voice.v1";
+    const key = voice ? `0x${String(++voiceCreates).padStart(2, "0").repeat(32)}` : entityKey;
+    rows.push({
+      key,
+      owner: keys.address,
+      attributes: [
+        { name: "arkiv.schema", type: "str", value: schema.name },
+        { name: "sealed", type: "bytes", value: values.sealed.value },
+      ],
+    });
+    if (voiceCreates === 2 && voice && !lost) {
+      lost = true;
+      throw new Error("lost mined clip response");
+    }
+    return { entityKey: key };
+  });
+  await expect(createHousehold(keys, input)).rejects.toThrow("Could not create voice record");
+  expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
+  expect(voiceCreates).toBe(3);
+  expect(rows).toHaveLength(4);
+});
+
+it("migrates an old encrypted journal and pending marker without losing its uploaded voice keys", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const oldHome = {
+    version: 1,
+    digipin: "39J49LL8T4",
+    pin: input.confirmedPin,
+    locality: input.locality,
+    roomNumber: input.roomNumber,
+    writtenAddress: input.writtenAddress,
+    directions: input.directions,
+    voiceKeys: { hi: entityKey, mr: entityKey, en: entityKey },
+  };
+  io.loadSetupCheckpoint.mockResolvedValueOnce({
+    name: "sana.pata.eth",
+    sealedHome: await sealJson(keys.sealKey, oldHome),
+    pending: "deploy",
+  });
+  expect((await createHousehold(keys, input)).homeRecordKey).toBe(entityKey);
+  expect(io.createEntity.mock.calls.map(([schema]) => schema.name)).toEqual(["pata.home.v1"]);
+});
+
+it("rejects oversized voice bytes before top-up and before any upload", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  await expect(
+    createHousehold(keys, { ...input, voiceClips: { ...input.voiceClips, hi: new Uint8Array(128 * 1024) } }),
+  ).rejects.toThrow("oversized voice clip");
+  expect(io.topup).not.toHaveBeenCalled();
+  expect(io.createEntity).not.toHaveBeenCalled();
+});
+
 it("creates a household with progress and seals the complete confirmed home before saving public state", async () => {
   const keys = await deriveHouseholdKeys(new Uint8Array(32));
   const progress: string[] = [];
@@ -316,6 +429,7 @@ it("creates a household with progress and seals the complete confirmed home befo
     "deploy",
     "register",
     "resolve",
+    "voice-records",
     "home-record",
     "save",
     "complete",
@@ -325,7 +439,7 @@ it("creates a household with progress and seals the complete confirmed home befo
     { chain: "arkiv" },
   ]);
   expect(io.registerName.mock.calls[0][1]).toEqual({ label: "sana", resolver, grantRegistry });
-  const values = io.createEntity.mock.calls[0][1];
+  const values = io.createEntity.mock.calls.find(([schema]) => schema.name === "pata.home.v1")![1];
   expect(await openJson(keys.sealKey, hexToBytes(values.sealed.value))).toEqual({
     version: 1,
     digipin: "39J49LL8T4",
@@ -334,6 +448,6 @@ it("creates a household with progress and seals the complete confirmed home befo
     roomNumber: input.roomNumber,
     writtenAddress: input.writtenAddress,
     directions: input.directions,
-    voiceKeys: input.voiceKeys,
+    voiceKeys: { hi: entityKey, mr: entityKey, en: entityKey },
   });
 });
