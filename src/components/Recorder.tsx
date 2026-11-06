@@ -10,7 +10,9 @@ export interface RecorderProps {
 
 export default function Recorder({
   onRecorded,
-  maxSeconds = 30,
+  // Sarvam and inspectRecording reject anything over 30 s, and the timer below checks every 250 ms and the
+  // recorder flushes after stop, so stopping at 30 produced ~30.2 s files that always failed. Stop at 28.
+  maxSeconds = 28,
 }: RecorderProps) {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
