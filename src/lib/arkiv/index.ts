@@ -1,4 +1,4 @@
-// Arkiv records: four types, each ONE sealed bytes column and nothing public. Owner: blockchain.
+// Arkiv records: four types, sealed bytes columns only. Owner: blockchain.
 // Read docs/research/arkiv.md first. SDK 1.0.0 only: older examples (and AI-written code) use the
 // pre-1.0 payload API. Log every surprise in arkiv/friction.md, one line each.
 //
@@ -9,7 +9,7 @@
 //
 // Every query filters ownedBy(household): anyone can write under our schema tags (arkiv.md Gotcha 2).
 //
-// Decision for the blockchain owner to confirm as ADR 0008: a pata.grant.v1 entity has TWO sealed bytes
+// ADR 0008: a pata.grant.v1 entity has TWO sealed bytes
 // columns (one shared 128 KiB budget): `payload`, sealed to the session key (what the courier opens),
 // and `index`, sealed to the household key ({ grantLabel, requester, purpose, grantEnd }). The payload
 // key isn't known until the batch lands, so the history entry can't carry it; the index lets the
@@ -17,19 +17,48 @@
 // local state. Nothing readable is public either way.
 import type { GrantPayload, HistoryEntry, HomeRecord, Language, LiveGrant } from "../../../shared/domain";
 import type { HouseholdKeys } from "../keys";
+import { ExpirationTime, NoEntityFoundError } from "@arkiv-network/sdk";
+import { bytes } from "@arkiv-network/sdk/schema";
+import { hexToBytes } from "viem";
+import { ARKIV_MAX_DAYS, ARKIV_MAX_BYTES } from "../../../shared/constants";
+import { arkivPublicClient, arkivWalletClient } from "../rpc";
+import { openJson, sealJson, openBytes, sealBytes } from "../seal";
+import { homeSchema, voiceSchema, grantSchema, historySchema } from "./schemas";
+import { canonicalJson, findSealedRecord } from "./reuse";
+import { asc } from "@arkiv-network/sdk/query";
+import { loadHouseholdState } from "../keys/store";
+import { grantStatusByName } from "../ens/grants";
 
 export type EntityKey = `0x${string}`;
 
 export async function createHomeRecord(keys: HouseholdKeys, home: HomeRecord): Promise<EntityKey> {
-  void keys;
-  void home;
-  throw new Error("createHomeRecord: not implemented (P0-8)");
+  try {
+    const existing = await findSealedRecord(
+      keys,
+      homeSchema,
+      async (sealed) => canonicalJson(await openJson(keys.sealKey, sealed)) === canonicalJson(home),
+    );
+    if (existing) return existing;
+    const result = await arkivWalletClient(keys.account).createEntity(
+      homeSchema,
+      { sealed: bytes(await sealJson(keys.sealKey, home)) },
+      { expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS) },
+    );
+    return result.entityKey;
+  } catch {
+    throw new Error("Could not create home record");
+  }
 }
 
 export async function readHomeRecord(keys: HouseholdKeys, key: EntityKey): Promise<HomeRecord> {
-  void keys;
-  void key;
-  throw new Error("readHomeRecord: not implemented (P0-8)");
+  try {
+    const row = await arkivPublicClient().getEntity(key, homeSchema);
+    if (row.$owner.toLowerCase() !== keys.address.toLowerCase())
+      throw new Error("Home record belongs to another household");
+    return await openJson<HomeRecord>(keys.sealKey, hexToBytes(row.sealed.value));
+  } catch {
+    throw new Error("Could not read home record");
+  }
 }
 
 export async function createVoiceRecord(
@@ -37,16 +66,33 @@ export async function createVoiceRecord(
   language: Language,
   mp3: Uint8Array,
 ): Promise<EntityKey> {
-  void keys;
+  // Language is already associated with this entity key in the sealed home record.
   void language;
-  void mp3;
-  throw new Error("createVoiceRecord: not implemented (P0-9)");
+  try {
+    const existing = await findSealedRecord(keys, voiceSchema, async (sealed) => {
+      const opened = await openBytes(keys.sealKey, sealed);
+      return opened.length === mp3.length && opened.every((value, index) => value === mp3[index]);
+    });
+    if (existing) return existing;
+    const result = await arkivWalletClient(keys.account).createEntity(
+      voiceSchema,
+      { sealed: bytes(await sealBytes(keys.sealKey, mp3)) },
+      { expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS) },
+    );
+    return result.entityKey;
+  } catch {
+    throw new Error("Could not create voice record");
+  }
 }
 
 export async function readVoiceRecord(keys: HouseholdKeys, key: EntityKey): Promise<Uint8Array> {
-  void keys;
-  void key;
-  throw new Error("readVoiceRecord: not implemented (P0-10)");
+  try {
+    const row = await arkivPublicClient().getEntity(key, voiceSchema);
+    if (row.$owner.toLowerCase() !== keys.address.toLowerCase()) throw new Error("Wrong owner");
+    return await openBytes(keys.sealKey, hexToBytes(row.sealed.value));
+  } catch {
+    throw new Error("Could not read voice record");
+  }
 }
 
 /** One batch: the payload (sealed to the session key, expires at grantEnd) + an "issued" history entry. */
@@ -55,40 +101,156 @@ export async function createGrantBatch(
   sessionSealKey: CryptoKey,
   payload: GrantPayload,
   issued: HistoryEntry,
+  supersededHistoryKey?: EntityKey,
 ): Promise<{ payloadKey: EntityKey; historyKey: EntityKey }> {
-  void keys;
-  void sessionSealKey;
-  void payload;
-  void issued;
-  throw new Error("createGrantBatch: not implemented (P0-10)");
+  try {
+    if (
+      issued.kind !== "issued" ||
+      issued.grantEnd !== payload.grantEnd ||
+      issued.purpose !== payload.purpose ||
+      canonicalJson(issued.requester) !== canonicalJson(payload.requester) ||
+      !/^[a-z2-7]{8}$/.test(issued.grantLabel) ||
+      !Number.isSafeInteger(payload.grantEnd) ||
+      payload.grantEnd <= issued.at
+    )
+      throw new Error("Invalid grant batch");
+    const index = {
+      grantLabel: issued.grantLabel,
+      requester: issued.requester,
+      purpose: issued.purpose,
+      grantEnd: issued.grantEnd,
+    };
+    const [sealedPayload, sealedIndex, sealedHistory] = await Promise.all([
+      sealJson(sessionSealKey, payload),
+      sealJson(keys.sealKey, index),
+      sealJson(keys.sealKey, issued),
+    ]);
+    if (sealedPayload.length + sealedIndex.length > ARKIV_MAX_BYTES || sealedHistory.length > ARKIV_MAX_BYTES)
+      throw new Error("Grant batch exceeds bytes budget");
+    const result = await arkivWalletClient(keys.account).executeBatch({
+      creates: [
+        {
+          schema: grantSchema,
+          values: { payload: bytes(sealedPayload), index: bytes(sealedIndex) },
+          expiration: ExpirationTime.atDate(new Date(payload.grantEnd * 1000)),
+        },
+        {
+          schema: historySchema,
+          values: { sealed: bytes(sealedHistory) },
+          expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS),
+          flags: { readonly: true },
+        },
+      ],
+      ...(supersededHistoryKey ? { deletes: [{ entityKey: supersededHistoryKey }] } : {}),
+    });
+    const [payloadKey, historyKey] = result.createdEntities;
+    if (
+      result.createdEntities.length !== 2 ||
+      !/^0x[\da-fA-F]{64}$/.test(payloadKey) ||
+      !/^0x[\da-fA-F]{64}$/.test(historyKey) ||
+      payloadKey === historyKey
+    )
+      throw new Error("Incomplete grant batch receipt");
+    return { payloadKey, historyKey };
+  } catch {
+    throw new Error("Could not create grant batch");
+  }
 }
 
 /** Courier view. Null when missing, expired or deleted. Also returns the entity's $owner for the check. */
 export async function readGrantPayload(
   payloadKey: EntityKey,
   sessionSealKey: CryptoKey,
+  expectedOwner: `0x${string}`,
 ): Promise<{ payload: GrantPayload; owner: `0x${string}` } | null> {
-  void payloadKey;
-  void sessionSealKey;
-  throw new Error("readGrantPayload: not implemented (P0-11)");
+  try {
+    const row = await arkivPublicClient().getEntity(payloadKey, grantSchema);
+    if (row.$owner.toLowerCase() !== expectedOwner.toLowerCase()) return null;
+    return {
+      payload: await openJson<GrantPayload>(sessionSealKey, hexToBytes(row.payload.value)),
+      owner: row.$owner,
+    };
+  } catch (error) {
+    if (error instanceof NoEntityFoundError) return null;
+    throw new Error("Could not read grant payload");
+  }
 }
 
 export async function deleteGrantPayload(keys: HouseholdKeys, payloadKey: EntityKey): Promise<void> {
-  void keys;
-  void payloadKey;
-  throw new Error("deleteGrantPayload: not implemented (P0-12)");
+  try {
+    const row = await arkivPublicClient().getEntity(payloadKey, grantSchema);
+    if (row.$owner.toLowerCase() !== keys.address.toLowerCase()) throw new Error("Wrong owner");
+    await arkivWalletClient(keys.account).deleteEntity({ entityKey: payloadKey });
+  } catch (error) {
+    if (error instanceof NoEntityFoundError) return;
+    throw new Error("Could not delete grant payload");
+  }
 }
 
 export async function createHistoryEntry(keys: HouseholdKeys, entry: HistoryEntry): Promise<EntityKey> {
-  void keys;
-  void entry;
-  throw new Error("createHistoryEntry: not implemented (P0-12)");
+  try {
+    const existing = await findSealedRecord(
+      keys,
+      historySchema,
+      async (sealed) => canonicalJson(await openJson(keys.sealKey, sealed)) === canonicalJson(entry),
+    );
+    if (existing) return existing;
+    const sealed = await sealJson(keys.sealKey, entry);
+    if (sealed.length > ARKIV_MAX_BYTES) throw new Error("History too large");
+    return (
+      await arkivWalletClient(keys.account).createEntity(
+        historySchema,
+        { sealed: bytes(sealed) },
+        {
+          expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS),
+          flags: { readonly: true },
+        },
+      )
+    ).entityKey;
+  } catch {
+    throw new Error("Could not create history entry");
+  }
 }
 
 /** Live-access list (P1-2): payload keys + expiry from an owner query. Details come from history entries. */
-export async function listLiveGrants(keys: HouseholdKeys): Promise<LiveGrant[]> {
-  void keys;
-  throw new Error("listLiveGrants: not implemented (P1-2)");
+export async function listLiveGrants(keys: HouseholdKeys, householdName?: string): Promise<LiveGrant[]> {
+  try {
+    const name = householdName ?? (await loadHouseholdState())?.name;
+    if (!name) throw new Error("Household name required");
+    const grants: LiveGrant[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await arkivPublicClient()
+        .select({ $key: true, $owner: true, index: true })
+        .from(grantSchema)
+        .ownedBy(keys.address)
+        .orderBy(asc("$key"))
+        .limit(100)
+        .offset(offset)
+        .fetch();
+      for (const row of page.entities) {
+        if (row.$owner.toLowerCase() !== keys.address.toLowerCase()) continue;
+        let index: Omit<LiveGrant, "payloadKey">;
+        try {
+          index = await openJson(keys.sealKey, hexToBytes(row.index.value));
+          if (
+            !/^[a-z2-7]{8}$/.test(index.grantLabel) ||
+            !Number.isSafeInteger(index.grantEnd) ||
+            typeof index.purpose !== "string" ||
+            typeof index.requester?.displayName !== "string"
+          )
+            continue;
+        } catch {
+          continue;
+        }
+        if ((await grantStatusByName(`${index.grantLabel}.${name}`)).live)
+          grants.push({ ...index, payloadKey: row.$key });
+      }
+      if (page.entities.length + page.skipped < 100) break;
+    }
+    return grants.sort((a, b) => a.grantEnd - b.grantEnd);
+  } catch {
+    throw new Error("Could not list live grants");
+  }
 }
 
 export async function listHistory(keys: HouseholdKeys): Promise<HistoryEntry[]> {

@@ -8,6 +8,17 @@ You're on the critical path: the first household name on Sepolia is due at **hou
 
 - [x] P0-5 keys and seal: device root and household state storage, deterministic household/grant identities with frozen vectors, AES-GCM-256 round trips and rejection tests. See `docs/plans/P0-5.md`.
 - [x] P0-5 RPC module: Nox clients, routing/logging tests and real localhost reads on both chains. See `docs/plans/P0-5-rpc.md`.
+- [x] P0-8 ENS module: pinned ABIs, roles, names, household deployments and locality update; verified on Sepolia. See `docs/plans/P0-8-ens.md`.
+- [ ] P0-8 ENS end-to-end: owner's `/register`, then verify `getEnsText` through universal resolution (user explicitly deferred registration).
+- [x] P0-8 Arkiv module: four schemas, ADR 0008, sealed home/voice create/read functions and owner/schema/error tests. See `docs/plans/P0-8-arkiv.md`.
+- [x] P0-8 Arkiv live home/voice round-trip: real Rabdi create/read, owner/expiry/ciphertext checks and decoded 183-day rejection passed. See `docs/plans/P0-8-arkiv.md` for receipts and evidence.
+- [x] P0-8 setup flow: persistent signIn, recoverable relay/proxy/record retries, encrypted checkpoints, funded per-language voiceClips uploads and owner/locality verification. See `docs/plans/P0-8.md` for the updated caller interface.
+- [ ] P0-8 first household through `/setup`: DIGIPIN and signed relay clients/routes integrated; frontend setup and AI/ML directions/voice inputs remain pending. Combined integration checks and build pass; see `docs/plans/P0-8.md`.
+- [x] P0-10 blockchain grant flow: chain-time expiry, encrypted payload/index/history batch, role-free mint with coordinated one-time expiry refresh and approval orchestration. Live batch, permissions, revoke and expiry assertions verified; see `docs/plans/P0-10.md` and P0-3 for observation limits.
+- [ ] P0-10 consent-screen link: frontend formatter and consent/share/QR integration pending, as agreed with the user.
+- [x] P0-11 blockchain checks: exact ENS owners, pre-decryption payload owner check, missing-entity handling and courier live/ended/checking/invalid states. See `docs/plans/P0-11.md`.
+- [x] P0-12 backend revoke: status-first unregister, sealed retry checkpoint, idempotent Arkiv cleanup/history and registry-checked owner index listings. Real Sepolia/Rabdi backend smoke passed; see `docs/plans/P0-12.md` and P0-3.
+- [ ] P0-11/P0-12 courier-screen timing: frontend parser and `/c` polling integration plus a registered app household are pending; user approved recording the frontend handoff.
 - [ ] P0-3 follow-up: repeat with an Arkiv access key on the OnePlus 11 preview; five funded Nox write measurements per chain (deferred by the user until device, preview and funds are ready).
 
 For testing on Sepolia and Rabdi you need your own development wallet (SETUP.md §3), funded from the faucets. Its key goes in your `.env.local` only; Codex must never read or print it. Household keys come from the app itself.
