@@ -4,6 +4,7 @@
 import type {
   CandidatePin,
   DirectionsText,
+  GrantRequest,
   Language,
   LatLon,
   Locality,
@@ -12,16 +13,25 @@ import type {
 } from "../../../shared/domain";
 import type { RankResponse } from "../../../shared/api";
 import { DEMO_BBOX } from "../map/config";
-import { PROVIDER_NAME } from "../../../shared/constants";
-import { deriveHouseholdKeys, newRandomRoot, type HouseholdKeys } from "../keys";
+import { GRANT_LATENCY_MARGIN_SECONDS, PROVIDER_NAME } from "../../../shared/constants";
+import {
+  deriveGrantIdentity,
+  deriveHouseholdKeys,
+  newRandomRoot,
+  newSessionKey,
+  type HouseholdKeys,
+} from "../keys";
 import {
   loadDeviceRoot,
+  loadHouseholdState as loadStoredHouseholdState,
   saveDeviceRoot,
   saveHouseholdState,
   type HouseholdState,
 } from "../keys/store";
 import { isValidHouseholdLabel, suggestHouseholdLabel } from "../ens/names";
+import { formatCourierLink } from "../link";
 import type { NewHousehold, SetupStep } from "./setup-household";
+import type { ApprovedGrant } from "./approve-grant";
 
 export { isValidHouseholdLabel, suggestHouseholdLabel };
 
@@ -233,3 +243,60 @@ export async function createHousehold(
   onProgress("complete");
   return state;
 }
+
+export async function loadOrDefaultHouseholdState(): Promise<HouseholdState> {
+  const existing = await loadStoredHouseholdState().catch(() => null);
+  if (existing) return existing;
+  return {
+    name: `blue-gate.${PROVIDER_NAME}`,
+    resolver: "0x1111111111111111111111111111111111111111",
+    grantRegistry: "0x2222222222222222222222222222222222222222",
+    homeRecordKey:
+      "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  };
+}
+
+export async function approveGrant(
+  keys: HouseholdKeys,
+  household: HouseholdState,
+  request: GrantRequest,
+): Promise<ApprovedGrant> {
+  void keys;
+  await delay(450);
+
+  if (
+    !request.requester.displayName.trim() ||
+    !request.purpose.trim() ||
+    !Number.isSafeInteger(request.durationSeconds) ||
+    request.durationSeconds <= 0
+  ) {
+    throw new Error("Could not approve grant");
+  }
+
+  const sessionKey = newSessionKey();
+  const identity = await deriveGrantIdentity(sessionKey);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const grantEnd =
+    nowSeconds + request.durationSeconds + GRANT_LATENCY_MARGIN_SECONDS;
+
+  const payloadKey =
+    "0x9988776655443322110099887766554433221100998877665544332211009988" as const;
+
+  const origin =
+    typeof location !== "undefined" && location.origin
+      ? location.origin
+      : "http://localhost:3000";
+
+  const courierLink = formatCourierLink(origin, {
+    householdName: household.name,
+    payloadKey,
+    sessionKey,
+  });
+
+  return {
+    courierLink,
+    grantLabel: identity.label,
+    grantEnd,
+  };
+}
+
