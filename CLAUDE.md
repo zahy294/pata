@@ -42,6 +42,7 @@ Privacy is the product. Each invariant is a judging claim, so a change that brea
 ## How we work
 
 - Scope ladder: P1 opens when every P0 ticket is done, and P2 when every P1 ticket is. When time runs short, cut the ticket.
+- `main` is frozen until P1 ships: P1 work branches from `p1`, and pull requests go into `p1`. Only the owner merges `p1` into `main`, once all of P1 works on phones ([`docs/team/p1-branching.md`](docs/team/p1-branching.md)).
 - Small commits named with the ticket id; commit history is judged.
 - ETHGlobal wants planning files in the repo: each ticket's plan goes in `docs/plans/<id>.md`.
 - AI use: the README's AI-use section says which files and parts AI wrote (an ETHGlobal rule).

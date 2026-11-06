@@ -4,6 +4,8 @@ Pata: households own `name.pata.eth` on ENSv2 (Sepolia). Couriers and apps get e
 
 Read before any task: this file, your role file in `docs/team/`, the ticket in `docs/tickets.md`, and the research note for the technology you touch (`docs/research/README.md` indexes them). Terms come from `GLOSSARY.md`; decisions from `docs/adr/`. When a research note and your memory disagree, the note wins: the versions here are newer than your training data.
 
+**`main` is frozen until P1 ships.** Never push to `main`, open a pull request into it, or merge into it. Branch from `p1` and open pull requests into `p1`. Read [`docs/team/p1-branching.md`](docs/team/p1-branching.md) before any change.
+
 ## Workflow (every ticket)
 
 1. Write `docs/plans/<ticket id>.md` (template in `docs/plans/README.md`). Commit it alone: `P0-4: plan`.
