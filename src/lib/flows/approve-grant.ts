@@ -15,6 +15,7 @@ import { calculateGrantEnd, buildGrantPayload } from "./grant-data";
 import { formatCourierLink } from "../link";
 import { toHex } from "viem";
 import { GRANT_AUDIO_EXPIRY_MARGIN_SECONDS } from "../../../shared/constants";
+import { ensureArkivGas } from "./arkiv-gas";
 
 export interface ApprovedGrant {
   courierLink: string;
@@ -40,6 +41,7 @@ export async function approveGrant(
       payloadKey: toHex(new Uint8Array(32)),
       sessionKey,
     });
+    await ensureArkivGas(keys);
     const home = await readHomeRecord(keys, household.homeRecordKey);
     const voiceKey = home.voiceKeys[request.language];
     const voice = voiceKey ? await readVoiceRecord(keys, voiceKey) : null;

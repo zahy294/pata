@@ -19,6 +19,7 @@ const io = vi.hoisted(() => ({
   readContract: vi.fn(),
   owner: vi.fn(),
   getCode: vi.fn(),
+  getTransactionCount: vi.fn(),
   getEnsText: vi.fn(),
   waitReceipt: vi.fn(),
   writeContract: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("../rpc", () => ({
   sepoliaPublicClient: () => ({
     readContract: io.readContract,
     getCode: io.getCode,
+    getTransactionCount: io.getTransactionCount,
     getEnsText: io.getEnsText,
     waitForTransactionReceipt: io.waitReceipt,
   }),
@@ -74,6 +76,7 @@ beforeEach(async () => {
     checkpoint = structuredClone(value);
   });
   io.topup.mockResolvedValue({ txHash: null, balanceWei: "100000000000000000" });
+  io.getTransactionCount.mockResolvedValue(0);
   io.registerName.mockResolvedValue({ txHash: "0x99" });
   io.owner.mockResolvedValue(keys.address);
   io.readContract.mockImplementation(async ({ functionName, args }) => {
@@ -370,7 +373,8 @@ it("checkpoints each language so a failed second clip does not upload the first 
   const state = await createHousehold(keys, input);
   expect(state.homeRecordKey).toBe(entityKey);
   expect(attempts).toEqual([1, 2, 2, 3]);
-  expect(io.topup.mock.calls.filter(([, request]) => request.chain === "arkiv")).toHaveLength(1);
+  // The checkpointed first top-up isn't repeated; each attempt asks once more before its Arkiv writes.
+  expect(io.topup.mock.calls.filter(([, request]) => request.chain === "arkiv")).toHaveLength(3);
   expect(JSON.stringify(checkpoint)).not.toContain(input.roomNumber);
 });
 
@@ -461,6 +465,7 @@ it("creates a household with progress and seals the complete confirmed home befo
   ]);
   expect(io.topup.mock.calls.map(([, request]) => request)).toEqual([
     { chain: "sepolia" },
+    { chain: "arkiv" },
     { chain: "arkiv" },
   ]);
   expect(io.registerName.mock.calls[0][1]).toEqual({ label: "sana", resolver, grantRegistry });

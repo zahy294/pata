@@ -23,6 +23,7 @@ vi.mock("../rpc", () => ({
   sepoliaPublicClient: () => io,
   sepoliaWalletClient: () => io,
 }));
+vi.mock("../server-client", () => ({ topup: async () => ({ txHash: null, balanceWei: "100000000000000000" }) }));
 // Frontend formatter is a documented stub dependency; only its interface is substituted.
 vi.mock("../link", () => ({ formatCourierLink: io.format }));
 const homeKey = `0x${"11".repeat(32)}` as const;

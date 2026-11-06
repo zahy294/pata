@@ -107,7 +107,7 @@ it("does not charge daily quota for sufficient balances or cooldown skips", asyn
   await topUp(env, "sepolia", household, "192.0.2.1");
   for (let i = 0; i < 6; i++) expect((await topUp(env, "sepolia", household, "192.0.2.1")).txHash).toBeNull();
   const other = `0x${"55".repeat(20)}` as const;
-  chain.getBalance.mockResolvedValue(10000000000000000n);
+  chain.getBalance.mockResolvedValue(50000000000000000n);
   for (let i = 0; i < 6; i++) expect((await topUp(env, "arkiv", other, "192.0.2.1")).txHash).toBeNull();
   chain.getBalance.mockResolvedValue(0n);
   for (let i = 0; i < 19; i++) {
@@ -271,7 +271,7 @@ it("sends the fixed Sepolia top-up and waits until it is spendable", async () =>
 });
 
 it.each(["sepolia", "arkiv"] as const)("skips %s at or above half target", async (network) => {
-  const balance = network === "sepolia" ? 250000000000000n : 10000000000000000n;
+  const balance = network === "sepolia" ? 250000000000000n : 50000000000000000n;
   chain.getBalance.mockResolvedValue(balance);
   expect(await topUp(testEnv(), network, household)).toEqual({ txHash: null, balanceWei: balance });
   expect(chain.sendTransaction).not.toHaveBeenCalled();
@@ -286,7 +286,7 @@ it("limits concurrent top-ups to one per household and chain for 10 minutes", as
   vi.setSystemTime(Date.now() + 1000);
   expect((await topUp(env, "arkiv", household)).txHash).toBe(hash);
   expect(chain.sendTransaction).toHaveBeenLastCalledWith(
-    expect.objectContaining({ value: 20000000000000000n }),
+    expect.objectContaining({ value: 100000000000000000n }),
   );
   vi.setSystemTime(Date.now() + 598000);
   expect((await topUp(env, "sepolia", household)).txHash).toBeNull();

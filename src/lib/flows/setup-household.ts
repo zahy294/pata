@@ -30,6 +30,7 @@ import {
   textToSpeech,
 } from "../server-client";
 import { shortenDirections } from "../server-client/directions-text";
+import { ensureArkivGas } from "./arkiv-gas";
 import { deployHouseholdContracts, householdLabelStatus } from "../ens/household";
 import { dnsEncode, isValidHouseholdLabel } from "../ens/names";
 import { universalHelperAbi } from "../ens/abis";
@@ -333,6 +334,8 @@ export async function createHousehold(
       checkpoint.resolved = true;
       await save();
     }
+    // The first top-up is checkpointed, so a resumed setup asks again before its Arkiv writes.
+    if (!checkpoint.homeRecordKey) await ensureArkivGas(keys);
     if (clipLanguages.some((language) => !checkpoint.voiceKeys?.[language])) {
       onProgress("voice-records");
       checkpoint.voiceKeys ??= {};
