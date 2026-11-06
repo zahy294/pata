@@ -60,14 +60,55 @@ describe("RPC clients", () => {
     snapshot.pop();
     expect(rpc.rpcLog()[0].method).toBe("eth_chainId");
   });
-  it("never falls back to a direct read when Nox fails", async () => {
+  it("never falls back to a direct read when Nox keeps failing", async () => {
     const direct = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", direct);
     harness.fetch.mockRejectedValue(new Error("network failed"));
     const rpc = await import("./index");
     await expect(rpc.sepoliaPublicClient().getChainId()).rejects.toThrow();
-    expect(harness.fetch).toHaveBeenCalledTimes(1);
+    expect(harness.fetch).toHaveBeenCalledTimes(3);
     expect(direct).not.toHaveBeenCalled();
+  });
+  it("survives one slow or failed read through Nox by asking again (phone run, 2026-11-06)", async () => {
+    harness.fetch
+      .mockRejectedValueOnce(new Error("mixnet timeout"))
+      .mockImplementation(async (_input, init) => {
+        const body = JSON.parse(String(init?.body));
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: "0xaa36a7" });
+      });
+    const rpc = await import("./index");
+    expect(await rpc.sepoliaPublicClient().getChainId()).toBe(11155111);
+    expect(harness.fetch).toHaveBeenCalledTimes(2);
+  });
+  it("never re-sends a write through Nox, even when it fails", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DIRECT_WRITES", "0");
+    harness.fetch.mockRejectedValue(new Error("mixnet timeout"));
+    const { deriveHouseholdKeys } = await import("../keys");
+    const { account } = await deriveHouseholdKeys(new Uint8Array(32));
+    const rpc = await import("./index");
+    await expect(
+      rpc.sepoliaWalletClient(account).sendRawTransaction({ serializedTransaction: "0x01" }),
+    ).rejects.toThrow();
+    expect(harness.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("starts Nox ahead of the first read, and a failed start never throws", async () => {
+    harness.readyError = new Error("bootstrap failed body=private");
+    const rpc = await import("./index");
+    expect(() => rpc.warmUpPrivateRpc()).not.toThrow();
+    expect(harness.init).toHaveBeenCalledTimes(1);
+  });
+  it("starts a fresh worker for the next read when the first start failed (phone briefly offline)", async () => {
+    harness.readyError = new Error("bootstrap failed");
+    const rpc = await import("./index");
+    rpc.warmUpPrivateRpc();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    harness.readyError = undefined;
+    harness.fetch.mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      return Response.json({ jsonrpc: "2.0", id: body.id, result: "0xaa36a7" });
+    });
+    expect(await rpc.sepoliaPublicClient().getChainId()).toBe(11155111);
+    expect(harness.init).toHaveBeenCalledTimes(2);
   });
   it("routes both wallets through Nox when direct writes are disabled", async () => {
     vi.stubEnv("NEXT_PUBLIC_DIRECT_WRITES", "0");
@@ -115,7 +156,7 @@ describe("RPC clients", () => {
     expect(client.ccipRead).toBe(false);
     expect(typeof client.query).toBe("function");
     expect(client.transport.timeout).toBe(30_000);
-    expect(client.transport.retryCount).toBe(0);
+    expect(client.transport.retryCount).toBe(2);
     expect(harness.fetch).toHaveBeenCalledWith("https://arkiv.test/test-public-key", expect.anything());
     expect(harness.init).toHaveBeenCalledTimes(1);
     expect(rpc.arkivPublicClient()).toBe(client);
@@ -130,7 +171,7 @@ describe("RPC clients", () => {
     expect(await client.getChainId()).toBe(11155111);
     expect(client.ccipRead).toBe(false);
     expect(client.transport.timeout).toBe(30_000);
-    expect(client.transport.retryCount).toBe(0);
+    expect(client.transport.retryCount).toBe(2);
     expect(harness.fetch).toHaveBeenCalledWith("https://sepolia.test/", expect.anything());
     expect(rpc.sepoliaPublicClient()).toBe(client);
   });

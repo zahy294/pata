@@ -3,9 +3,14 @@
 //
 // - One long-lived AnonRpcWorker (Nox specifier on Sepolia), created lazily in the browser only.
 //   Its bootstrap (two specifier reads + bundle download) is the one allowed direct read.
-// - Reads: http(url, { fetchFn: worker.fetch, timeout: 30_000, retryCount: 0 }) for both Sepolia and
+// - Reads: http(url, { fetchFn: worker.fetch, timeout: 30_000, retryCount: 2 }) for both Sepolia and
 //   Rabdi, ccipRead: false, Rabdi pollingInterval 1,000 ms. The 30 s timeout outlasts Nox's 25 s call
-//   deadline, and retryCount 0 stops viem re-sending a call Nox may still deliver (workshop report).
+//   deadline. A read is safe to ask again: on a phone on 2026-11-06 one failed read stopped setup at
+//   "getting Sepolia gas" although the relay's top-up had landed.
+// - Wallet transports keep retryCount 0: viem must never re-send a call Nox may still deliver
+//   (workshop report).
+// - warmUpPrivateRpc starts the worker when a page opens, so its 4–25 s bootstrap isn't spent inside
+//   the first read's timeout. A worker whose start failed is dropped, and the next read starts another.
 // - Writes: direct while env.directWrites (P0), through the worker from P1-4. A stalled write goes
 //   through ./retry.ts, never a re-sign.
 // - Nothing else in the app may create a viem transport. Screens never import viem clients directly;
@@ -30,11 +35,19 @@ let arkivReads: ReturnType<typeof makeArkivPublicClient> | undefined;
 type RpcLogEntry = { chain: "sepolia" | "arkiv"; method: string; via: "nox" | "direct"; at: number };
 const entries: RpcLogEntry[] = [];
 
-function rpcTransport(chain: RpcLogEntry["chain"], url: string, via: RpcLogEntry["via"]) {
+function rpcTransport(
+  chain: RpcLogEntry["chain"],
+  url: string,
+  via: RpcLogEntry["via"],
+  use: "reads" | "wallet",
+) {
+  if (via === "nox") getWorker();
   return http(url, {
-    fetchFn: via === "nox" ? getWorker().fetch : undefined,
+    // Looked up per call, so a worker that failed to start is replaced rather than reused.
+    fetchFn: via === "nox" ? (input, init) => getWorker().fetch(input, init) : undefined,
     timeout: 30_000,
-    retryCount: 0,
+    retryCount: use === "reads" ? 2 : 0,
+    retryDelay: 500,
     onFetchRequest(_request, init) {
       // The body is transient. Retain method names only, never params or URLs.
       const body = JSON.parse(String(init.body));
@@ -55,7 +68,7 @@ function makeArkivPublicClient() {
     chain: rabdi({ accessKey: env.arkivAccessKey }),
     ccipRead: false,
     pollingInterval: 1000,
-    transport: rpcTransport("arkiv", arkivUrl(), "nox"),
+    transport: rpcTransport("arkiv", arkivUrl(), "nox", "reads"),
   });
 }
 
@@ -65,18 +78,28 @@ function getWorker(): AnonRpcWorker {
     const bootstrap = createPublicClient({
       chain: sepolia,
       ccipRead: false,
-      transport: rpcTransport("sepolia", env.sepoliaRpcUrl, "direct"),
+      transport: rpcTransport("sepolia", env.sepoliaRpcUrl, "direct", "reads"),
     });
-    worker = new AnonRpcWorker({
+    const created = new AnonRpcWorker({
       address: NOX_SPECIFIER,
       config: undefined,
       preExisting: { rpcProvider: { request: (args) => bootstrap.transport.request(args) } },
     });
-    void discardWorkerLogs(worker);
-    // A caller may construct a client before awaiting readiness.
-    void worker.ready.catch(() => {});
+    worker = created;
+    void discardWorkerLogs(created);
+    // A caller may construct a client before awaiting readiness. A failed start is dropped, so the
+    // next read starts a fresh worker instead of failing for the rest of the visit.
+    void created.ready.catch(() => {
+      if (worker === created) worker = undefined;
+    });
   }
   return worker;
+}
+
+/** Starts Nox when a page opens, ahead of its first read. Never throws; reads retry the start. */
+export function warmUpPrivateRpc(): void {
+  if (typeof window === "undefined") return;
+  void anonRpcReady().catch(() => {});
 }
 
 async function discardWorkerLogs(instance: AnonRpcWorker): Promise<void> {
@@ -102,7 +125,7 @@ export function sepoliaPublicClient(): PublicClient {
   return (sepoliaReads ??= createPublicClient({
     chain: sepolia,
     ccipRead: false,
-    transport: rpcTransport("sepolia", env.sepoliaRpcUrl, "nox"),
+    transport: rpcTransport("sepolia", env.sepoliaRpcUrl, "nox", "reads"),
   }));
 }
 
@@ -111,7 +134,7 @@ export function sepoliaWalletClient(account: LocalAccount): WalletClient {
     chain: sepolia,
     account,
     ccipRead: false,
-    transport: rpcTransport("sepolia", env.sepoliaRpcUrl, env.directWrites ? "direct" : "nox"),
+    transport: rpcTransport("sepolia", env.sepoliaRpcUrl, env.directWrites ? "direct" : "nox", "wallet"),
   });
 }
 
@@ -127,7 +150,7 @@ export function arkivWalletClient(account: LocalAccount) {
     account,
     ccipRead: false,
     pollingInterval: 1000,
-    transport: rpcTransport("arkiv", arkivUrl(), env.directWrites ? "direct" : "nox"),
+    transport: rpcTransport("arkiv", arkivUrl(), env.directWrites ? "direct" : "nox", "wallet"),
   });
 }
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import PrivateRpcWarmUp from "../components/PrivateRpcWarmUp";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
@@ -8,20 +9,14 @@ export const metadata: Metadata = {
   description: "Your door, shared only by consent.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#1A1816] text-[#1F1C18] antialiased selection:bg-[#046A38]/20">
+        <PrivateRpcWarmUp />
         <div className="mx-auto flex min-h-screen max-w-md flex-col bg-[#FAF5EC] shadow-2xl">
           <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#E6DAC6] bg-[#FAF5EC]/95 px-5 backdrop-blur-sm">
-            <Link
-              href="/"
-              className="flex items-baseline gap-2 focus:outline-none"
-            >
+            <Link href="/" className="flex items-baseline gap-2 focus:outline-none">
               <span className="font-serif text-2xl font-bold tracking-tight text-[#1F1C18]">
                 Pata<span className="text-[#B8862D]">.</span>
               </span>
