@@ -91,3 +91,24 @@ it("validates the request before calling a model", async () => {
   await expect(extractAddressParts("test-key", { wayToTheDoor: "", language: "en" })).rejects.toThrow();
   expect(network).not.toHaveBeenCalled();
 });
+
+it("asks once more when a complete reply fails the schema, charging both attempts", async () => {
+  const output = { locality: { name: "Dharavi", pinCode: "400017" }, landmarkPhrases: ["Murugan temple"] };
+  const network = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      modelReply({ locality: { name: "Dharavi", pinCode: "400 017" }, landmarkPhrases: [] }),
+    )
+    .mockResolvedValue(modelReply(output));
+  vi.stubGlobal("fetch", network);
+  const charge = vi.fn<(cents: number) => Promise<void>>().mockResolvedValue();
+  await expect(
+    extractAddressParts(
+      "test-key",
+      { wayToTheDoor: "Dharavi 400017 near Murugan temple", language: "en" },
+      charge,
+    ),
+  ).resolves.toEqual(output);
+  expect(network).toHaveBeenCalledTimes(2);
+  expect(charge).toHaveBeenCalledTimes(2);
+});
