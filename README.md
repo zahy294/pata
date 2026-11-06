@@ -33,7 +33,7 @@ Planned flow: confirm a proposed pin, create the name and encrypted home record,
 **Honest access boundary ([ADR 0005](docs/adr/0005-expiry-is-a-public-switch-not-encryption.md)):** only a grant holder can read the shared exact-door payload; the household retains its own home key. Expiry stops future access in honest clients; nothing can make anyone unsee an address. A holder can retain the payload/key, and transaction history may retain ciphertext. Updating only live grants after a move is planned, not a completed current-door guarantee.
 
 - **C — Censorship resistance:** Pata controls the host, registrar, relay and AI endpoint; refusal can stop new setup. The planned courier path reads chains without our API, but the server-off proof and parent-name pointer lock remain planned.
-- **O — Open source:** source and local commands are available. A project-wide licence is **planned**: no root LICENSE exists, so free/open-source licensing is not yet established. DIGIPIN's upstream Apache notice is retained; OSM-derived data requires ODbL attribution.
+- **O — Open source:** the project is [MIT licensed](LICENSE), with source and local commands available. `src/lib/digipin/` keeps India Post's [Apache-2.0 notice](src/lib/digipin/LICENSE.apache-2.0); OSM-derived data requires ODbL attribution.
 - **P — Privacy:** the host sees visits/IPs; the Worker sees signed household addresses/IPs. Planned Claude/Sarvam calls expose the way to the door and derived directions; map search gets locality/landmarks, never typed room numbers. Nox sees requests; bootstrap/direct endpoints see their traffic. Chains expose owners, labels, schema tags and timing despite encrypted contents. No provider zero-retention approval is claimed.
 - **S — Security:** HKDF identities, device storage and AES-GCM sealing are implemented. Page JavaScript can use the signing key; device storage is not a secure enclave. Passkey recovery and courier key-wiping integration are planned. Links are bearer secrets; registry state, not failed resolution, decides grant liveness.
 
@@ -128,3 +128,7 @@ Prerequisites: Node 22/npm and Foundry 1.8.7 on PATH; see [SETUP.md](SETUP.md).
    ```
 
 App: `http://localhost:3000`; Worker: `http://localhost:8787`. These commands run the draft and its placeholders, not the planned full demo. `npm run build` exports to `out/`; Playwright runs separately with `npm run e2e`. CLI tests: `node --test scripts/smoke-worker.test.mjs`. Only the owner deploys from an up-to-date `main`.
+
+## Licence
+
+The project is licensed under [MIT](LICENSE), copyright 2026 Pata contributors. India Post's DIGIPIN code in `src/lib/digipin/` retains its [Apache-2.0 licence and notice](src/lib/digipin/LICENSE.apache-2.0). Third-party code and OSM-derived data retain their respective licences.
