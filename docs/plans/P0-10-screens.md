@@ -26,4 +26,4 @@
 - `navigator.share` is not supported on all desktop browsers: fall back cleanly to `navigator.clipboard.writeText` with a "Copied" confirmation state.
 - Raw errors from approval calls must never be displayed directly; show a plain sentence and a retry button.
 
-**Result:** (in progress)
+**Result:** Implemented `src/components/QrCode.tsx` using the local `qrcode` package, added fake `approveGrant` / `loadOrDefaultHouseholdState` helpers in `src/lib/flows/fake.ts`, and built `src/app/approve/page.tsx` with strict base64url JSON validation (`parseGrantRequestFragment`), consent card displaying requester/purpose/language/duration in words and `"Anyone with this link can find your door until it ends."`, approval action, share (`navigator.share` + copy fallback), local QR code, and the `"Make a test request"` `#fragment` builder form with the 20-second stage option. Verified with `npm run check` and `npm run build`.
