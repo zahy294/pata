@@ -15,7 +15,10 @@ test("the courier page loads", async ({ page }) => {
   await expect(page.getByText("This link doesn't work")).toBeVisible();
 });
 
-test("a live link shows the pin, then only the locality after the grant ends", async ({
+// Needs a real grant: /c now runs the real flow (ENS + Arkiv through Anon-RPC), so mint a short grant
+// from /approve on Sepolia and paste its link here before un-fixme-ing. The expectations below are the
+// old fake-flow values and must change to the real household's.
+test.fixme("a live link shows the pin, then only the locality after the grant ends", async ({
   page,
 }) => {
   const startTime = Date.now();
@@ -44,13 +47,9 @@ test("a live link shows the pin, then only the locality after the grant ends", a
 
 test("the # part is gone from the address bar after load", async ({ page }) => {
   await page.goto(SAMPLE_LINK);
-  await expect(page.getByText("Dharavi, 400017")).toBeVisible();
-
-  expect(page.url()).not.toContain("#");
-  const stored = await page.evaluate(() =>
-    window.sessionStorage.getItem("pata.courier.fragment"),
-  );
-  expect(stored).toContain("blue-gate.pata.eth");
+  await expect(page.getByRole("heading", { name: "Delivery directions" })).toBeVisible();
+  // The bearer secret leaves the address bar before any network check, whatever the link's state.
+  await expect.poll(() => page.url()).not.toContain("#");
 });
 
 test.fixme("no request goes to a host outside the connect-src list (CROPS proof)", async () => {});
