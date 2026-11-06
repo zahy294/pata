@@ -25,6 +25,58 @@ const home: HomeRecord = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
+  network.request.mockImplementation(async ({ method }) =>
+    method === "arkiv_query" ? { data: [], blockNumber: "0x1" } : null,
+  );
+});
+
+it("reuses a matching decrypted home from this owner's schema query instead of creating again", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const sealed = toHex(await sealJson(keys.sealKey, home));
+  network.request.mockImplementation(async ({ method, params }) => {
+    expect(method).toBe("arkiv_query");
+    expect(params[0]).toContain("pata.home.v1");
+    expect(params[0].toLowerCase()).toContain(keys.address.toLowerCase());
+    return { data: [rpcRow(keys.address, "pata.home.v1", sealed)], blockNumber: "0x1" };
+  });
+  expect(await createHomeRecord(keys, home)).toBe(key);
+  expect(network.createEntity).not.toHaveBeenCalled();
+});
+
+it("finds the home after the create response is lost, without issuing another create", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  let rows: ReturnType<typeof rpcRow>[] = [];
+  network.request.mockImplementation(async () => ({ data: rows, blockNumber: "0x1" }));
+  network.createEntity.mockImplementation(async (_schema, values) => {
+    rows = [rpcRow(keys.address, "pata.home.v1", values.sealed.value)];
+    throw new Error("lost response after mining");
+  });
+  await expect(createHomeRecord(keys, home)).rejects.toThrow("Could not create home record");
+  expect(await createHomeRecord(keys, home)).toBe(key);
+  expect(network.createEntity).toHaveBeenCalledTimes(1);
+});
+
+it("scans later pages and compares home contents independently of JSON property order", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  const reordered = Object.fromEntries(Object.entries(home).reverse());
+  const sealed = toHex(await sealJson(keys.sealKey, reordered));
+  network.request.mockImplementation(async ({ params }) => ({
+    data:
+      params[1].offset === "0x0"
+        ? Array.from({ length: 100 }, () => rpcRow(keys.address))
+        : [rpcRow(keys.address, "pata.home.v1", sealed)],
+    blockNumber: "0x1",
+  }));
+  expect(await createHomeRecord(keys, home)).toBe(key);
+  expect(network.createEntity).not.toHaveBeenCalled();
+  expect(network.request.mock.calls[1][0].params[1].offset).toBe("0x64");
+});
+
+it("does not create when home discovery fails", async () => {
+  const keys = await deriveHouseholdKeys(new Uint8Array(32));
+  network.request.mockRejectedValue(new Error("private RPC details"));
+  await expect(createHomeRecord(keys, home)).rejects.toThrow(/^Could not create home record$/);
+  expect(network.createEntity).not.toHaveBeenCalled();
 });
 
 function rpcRow(owner: Hex, schema = "pata.home.v1", sealed: Hex = "0x") {

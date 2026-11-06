@@ -24,11 +24,18 @@ import { ARKIV_MAX_DAYS } from "../../../shared/constants";
 import { arkivPublicClient, arkivWalletClient } from "../rpc";
 import { openJson, sealJson, openBytes, sealBytes } from "../seal";
 import { homeSchema, voiceSchema } from "./schemas";
+import { canonicalJson, findSealedRecord } from "./reuse";
 
 export type EntityKey = `0x${string}`;
 
 export async function createHomeRecord(keys: HouseholdKeys, home: HomeRecord): Promise<EntityKey> {
   try {
+    const existing = await findSealedRecord(
+      keys,
+      homeSchema,
+      async (sealed) => canonicalJson(await openJson(keys.sealKey, sealed)) === canonicalJson(home),
+    );
+    if (existing) return existing;
     const result = await arkivWalletClient(keys.account).createEntity(
       homeSchema,
       { sealed: bytes(await sealJson(keys.sealKey, home)) },

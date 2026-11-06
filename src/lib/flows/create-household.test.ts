@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { encodeAbiParameters, encodeEventTopics, hexToBytes } from "viem";
+import { encodeAbiParameters, encodeEventTopics, hexToBytes, custom } from "viem";
+import { createPublicClient as createArkivPublicClient } from "@arkiv-network/sdk";
 import { deriveHouseholdKeys } from "../keys";
 import { openJson } from "../seal";
 import { createHousehold, type NewHousehold } from "./setup-household";
@@ -22,6 +23,7 @@ const io = vi.hoisted(() => ({
   waitReceipt: vi.fn(),
   writeContract: vi.fn(),
   createEntity: vi.fn(),
+  arkivRequest: vi.fn(),
 }));
 vi.mock("../keys/store", () => io);
 vi.mock("../server-client", () => ({ topup: io.topup, registerName: io.registerName }));
@@ -35,7 +37,10 @@ vi.mock("../rpc", () => ({
     waitForTransactionReceipt: io.waitReceipt,
   }),
   sepoliaWalletClient: () => ({ writeContract: io.writeContract }),
-  arkivPublicClient: () => ({ waitForTransactionReceipt: io.waitReceipt }),
+  arkivPublicClient: () => ({
+    ...createArkivPublicClient({ transport: custom({ request: io.arkivRequest }) }),
+    waitForTransactionReceipt: io.waitReceipt,
+  }),
   arkivWalletClient: () => ({ createEntity: io.createEntity }),
 }));
 const resolver = "0x2222222222222222222222222222222222222222";
@@ -100,6 +105,7 @@ beforeEach(async () => {
     };
   });
   io.createEntity.mockResolvedValue({ entityKey });
+  io.arkivRequest.mockResolvedValue({ data: [], blockNumber: "0x1" });
 });
 
 it("resumes a failed final save without deploying, registering or creating a second home", async () => {
