@@ -115,8 +115,8 @@ export default function PinPicker({
       <div className="relative overflow-hidden rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] shadow-sm">
         <div className="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-[#1F1C18]/85 px-3.5 py-1 text-xs font-medium text-[#FAF5EC] shadow-md backdrop-blur-sm">
           {hasCandidates
-            ? "Drag pin to exact doorstep"
-            : "Drop a pin on your door"}
+            ? "Tap the map or drag the pin to your doorstep"
+            : "Tap the map where your door is"}
         </div>
 
         <MapView
@@ -124,6 +124,7 @@ export default function PinPicker({
           bbox={hasCandidates ? undefined : bbox}
           pins={mapPins}
           onPinMoved={handlePinMoved}
+          onMapClick={(point) => handlePinMoved(hasCandidates ? selectedIndex : 0, point)}
         />
 
         <div className="flex items-center justify-between border-t border-[#E6DAC6] bg-[#FFFDF9] px-3.5 py-2 text-xs text-[#6E655A]">
@@ -218,8 +219,8 @@ export default function PinPicker({
             Drop a pin on your door
           </p>
           <p className="mt-1 text-xs leading-relaxed text-[#6E655A]">
-            We could not match a nearby landmark automatically. Drag the pin on
-            the neighbourhood map above to your exact entrance.
+            We could not match a nearby landmark automatically. Zoom in on the
+            map above and tap your exact entrance, or drag the pin there.
           </p>
         </div>
       )}
