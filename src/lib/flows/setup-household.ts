@@ -30,6 +30,8 @@ import {
   textToSpeech,
 } from "../server-client";
 import { shortenDirections } from "../server-client/directions-text";
+import { RecordingInputError } from "../server-client/recording";
+import { ServerError } from "../server-client/signed";
 import { ensureArkivGas } from "./arkiv-gas";
 import { deployHouseholdContracts, householdLabelStatus } from "../ens/household";
 import { dnsEncode, isValidHouseholdLabel } from "../ens/names";
@@ -62,6 +64,17 @@ export async function signIn(): Promise<HouseholdKeys> {
 
 /** Step 1: a default name (never derived from the address; names are public, ADR 0006). */
 export { suggestHouseholdLabel, isValidHouseholdLabel } from "../ens/names";
+
+/** A plain sentence for a failed describeTheWay; never the raw error, which may carry request details. */
+export function describeTheWayError(failure: unknown): string {
+  if (failure instanceof RecordingInputError)
+    return failure.status === 422 && /30 seconds/.test(failure.message)
+      ? "That recording was too long. Keep it under 28 seconds and try again."
+      : "This phone's recording format isn't supported. Please type how people find your door instead.";
+  if (failure instanceof ServerError && failure.code === "speech_unavailable")
+    return "We couldn't hear any words in that recording. Hold the phone closer, speak clearly, and try again, or type it instead.";
+  return "Could not understand the address description right now. Please tap Retry.";
+}
 
 /** Step 1: whether a household label can be registered in pata.eth. Reserved counts as taken. */
 export async function checkHouseholdName(label: string): Promise<"available" | "taken" | "invalid"> {

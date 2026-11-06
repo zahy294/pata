@@ -46,3 +46,20 @@ it("does not return an unpersisted identity, and a failed sign-in does not poiso
   await expect(signIn()).rejects.toThrow("storage unavailable");
   expect((await signIn()).address).toMatch(/^0x[0-9a-fA-F]{40}$/);
 });
+
+it("explains a failed description in plain words without echoing the raw error", async () => {
+  const { describeTheWayError } = await import("./setup-household");
+  const { RecordingInputError } = await import("../server-client/recording");
+  const { ServerError } = await import("../server-client/signed");
+  expect(describeTheWayError(new RecordingInputError("Recording must be at most 30 seconds", 422))).toMatch(
+    /too long/,
+  );
+  expect(describeTheWayError(new RecordingInputError("Invalid or unsupported speech recording"))).toMatch(
+    /format isn't supported/,
+  );
+  expect(describeTheWayError(new ServerError(502, "speech_unavailable", "secret upstream detail"))).toMatch(
+    /couldn't hear any words/,
+  );
+  const generic = describeTheWayError(new Error("https://private.example request body"));
+  expect(generic).toBe("Could not understand the address description right now. Please tap Retry.");
+});

@@ -189,10 +189,8 @@ export default function SetupPage() {
         result.locality,
         result.landmarkPhrases,
       );
-    } catch {
-      setDescribeError(
-        "Could not understand the address description right now. Please tap Retry.",
-      );
+    } catch (failure) {
+      setDescribeError(flows.describeTheWayError(failure));
     } finally {
       setDescribeLoading(false);
     }
