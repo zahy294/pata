@@ -73,3 +73,14 @@ it("tells a missing locality apart from a temporary landmark-search failure", as
   );
   expect(isLocalityNotFound(new Error("network"))).toBe(false);
 });
+
+it("names the setup step a failed save stopped at, without the raw error", async () => {
+  const { createHouseholdError } = await import("./setup-household");
+  expect(createHouseholdError(new Error("https://private.example body"), "deploy")).toBe(
+    "Could not finish saving your home right now. It stopped while deploying your home's contracts. Tap Retry to resume from where it stopped.",
+  );
+  expect(
+    createHouseholdError(new Error("Resume setup with the original household details"), "deploy"),
+  ).toMatch(/clear this site's data/);
+  expect(createHouseholdError(new Error("x"), null)).not.toMatch(/stopped while/);
+});

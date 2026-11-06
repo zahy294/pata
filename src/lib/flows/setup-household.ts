@@ -65,6 +65,26 @@ export async function signIn(): Promise<HouseholdKeys> {
 /** Step 1: a default name (never derived from the address; names are public, ADR 0006). */
 export { suggestHouseholdLabel, isValidHouseholdLabel } from "../ens/names";
 
+const STEP_WORDS: Record<SetupStep, string> = {
+  "topup-sepolia": "getting Sepolia gas",
+  "topup-arkiv": "getting Arkiv gas",
+  deploy: "deploying your home's contracts",
+  register: "registering your home's name",
+  resolve: "checking that your name resolves",
+  "voice-records": "saving the voice clips",
+  "home-record": "saving your sealed home",
+  save: "saving on this phone",
+  complete: "finishing",
+};
+
+/** A plain sentence for a failed createHousehold: the step it stopped at, never the raw error. */
+export function createHouseholdError(failure: unknown, step: SetupStep | null): string {
+  if (failure instanceof Error && failure.message === "Resume setup with the original household details")
+    return "This phone already started saving a home with different details, so it can't resume. To start over, clear this site's data (Chrome: Settings → Site settings → All sites → pata) and set up again.";
+  const where = step ? ` It stopped while ${STEP_WORDS[step]}.` : "";
+  return `Could not finish saving your home right now.${where} Tap Retry to resume from where it stopped.`;
+}
+
 /** True when the server couldn't place "area, PIN" on the map at all: retrying can't help, editing can. */
 export function isLocalityNotFound(failure: unknown): boolean {
   return failure instanceof ServerError && failure.status === 422 && failure.code === "locality_not_found";
