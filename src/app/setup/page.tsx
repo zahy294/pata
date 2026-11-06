@@ -310,6 +310,7 @@ export default function SetupPage() {
     setSetupStarted(true);
     setCreateError(null);
     setCreateStep("topup-sepolia");
+    let lastStep: SetupStep | null = null;
 
     try {
       await flows.createHousehold(
@@ -325,14 +326,13 @@ export default function SetupPage() {
           candidates,
         },
         (step) => {
+          lastStep = step;
           setCreateStep(step);
         },
       );
       router.push("/");
-    } catch {
-      setCreateError(
-        "Could not finish saving your home right now. Tap Retry to resume from where it stopped.",
-      );
+    } catch (failure) {
+      setCreateError(flows.createHouseholdError(failure, lastStep));
     } finally {
       setCreating(false);
     }
