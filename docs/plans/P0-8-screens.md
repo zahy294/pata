@@ -30,4 +30,4 @@
 - Raw error objects from `viem` or `fetch` leaking request bodies: catch all errors in UI handlers and show a plain human-readable sentence with a retry button.
 - Browser APIs (`MediaRecorder`, `speechSynthesis`, `URL.createObjectURL`, `indexedDB`) touched during SSR prerender: keep inside `'use client'` event handlers and `useEffect`.
 
-**Result:** (in progress)
+**Result:** Implemented `src/lib/flows/fake.ts`, `src/components/Recorder.tsx`, `src/components/PinPicker.tsx`, `src/components/AudioPlayer.tsx`, `src/app/layout.tsx`, and the 7-step setup wizard in `src/app/setup/page.tsx`. Verified with `npm run check` (typecheck, 511 Vitest tests, Foundry tests) and `npm run build` static export.
