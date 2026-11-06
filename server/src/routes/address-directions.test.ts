@@ -43,8 +43,8 @@ it("returns schema-validated directions and charges model usage", async () => {
   expect(charged).toHaveBeenLastCalledWith(expect.anything(), 0.3);
 });
 
-it("returns uncached MP3 bytes and charges text before synthesis", async () => {
-  const bytes = await recordingFixture("tts-silence-16000.mp3");
+it("returns uncached AAC bytes and charges text before synthesis", async () => {
+  const bytes = await recordingFixture("tts-silence-8000.aac");
   const events: string[] = [];
   charged.mockImplementation(async () => {
     events.push("spend");
@@ -59,7 +59,7 @@ it("returns uncached MP3 bytes and charges text before synthesis", async () => {
   );
   const response = await speechOut(await context({ text: directions.hi, language: "hi" }));
   expect(response.status).toBe(200);
-  expect(response.headers.get("content-type")).toBe("audio/mpeg");
+  expect(response.headers.get("content-type")).toBe("audio/aac");
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array(bytes));
   expect(events).toEqual(["spend", "provider"]);

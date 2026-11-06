@@ -62,6 +62,7 @@ export const ARKIV_SCHEMAS = {
   voice: "pata.voice.v1",
   grant: "pata.grant.v1",
   history: "pata.history.v1",
+  grantAudio: "pata.grant-audio.v1",
 } as const;
 
 /** Rabdi's lifetime cap is 182.5 days; create at 182 and extend (P1-8). */
@@ -71,10 +72,12 @@ export const ARKIV_EXTEND_BELOW_DAYS = 90;
 /** All bytes values of one create share one 128 KiB budget. */
 export const ARKIV_MAX_BYTES = 128 * 1024;
 /**
- * Largest raw MP3 directions clip (P0-9). A grant payload carries the clip as base64 (4/3 larger) next to
- * the address text, and payload plus index share ARKIV_MAX_BYTES, so 80 KiB leaves about 21 KiB for the rest.
+ * Largest raw AAC directions clip (P0-9): one sealed clip fills one entity's bytes budget (sealBytes adds a
+ * version byte, a 12-byte IV and a 16-byte tag). About 25 s at Sarvam's 8 kHz AAC (~41 kbps).
  */
-export const MAX_VOICE_CLIP_BYTES = 80 * 1024;
+export const MAX_VOICE_CLIP_BYTES = ARKIV_MAX_BYTES - 29;
+/** A grant's audio entity outlives its first deadline by this much, so a CannotSetPastExpiry retry reuses it. */
+export const GRANT_AUDIO_EXPIRY_MARGIN_SECONDS = 15 * 60;
 
 // ---- Anon-RPC (anon-rpc.md) ----
 
@@ -93,8 +96,7 @@ export const COURIER_LINK_VERSION = "1";
 // ---- Household names (ADR 0006) ----
 
 /** 3–32 chars of a-z, 0-9 and hyphen; no hyphen at either end; no "--". */
-export const HOUSEHOLD_LABEL_PATTERN =
-  /^(?!.*--)[a-z0-9](?:[a-z0-9-]{1,30})[a-z0-9]$/;
+export const HOUSEHOLD_LABEL_PATTERN = /^(?!.*--)[a-z0-9](?:[a-z0-9-]{1,30})[a-z0-9]$/;
 
 // ---- Address AI ----
 

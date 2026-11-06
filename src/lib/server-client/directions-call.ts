@@ -5,7 +5,7 @@ import type { HouseholdKeys } from "../keys";
 import { postAddress } from "./address-call";
 import { shortenDirections } from "./directions-text";
 import { ServerError, signedPost } from "./signed";
-import { assertMp3, MAX_MP3_RESPONSE_BYTES } from "./mp3";
+import { assertAac, MAX_AUDIO_RESPONSE_BYTES } from "./aac";
 
 const responseSchema = DirectionsResponse.extend({
   directions: z.object({
@@ -34,13 +34,13 @@ export async function postDirections(
   };
 }
 
-export async function postMp3(keys: HouseholdKeys, text: string, language: Language): Promise<Uint8Array> {
+export async function postAudio(keys: HouseholdKeys, text: string, language: Language): Promise<Uint8Array> {
   const input = SpeechOutRequest.parse({ text, language });
   if (!input.text.trim()) throw new Error("Invalid speech text");
   try {
     const response = await signedPost(keys, ROUTES.speechOut, JSON.stringify(input));
     if (
-      response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "audio/mpeg" ||
+      response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "audio/aac" ||
       !response.body
     ) {
       await response.body?.cancel();
@@ -54,7 +54,7 @@ export async function postMp3(keys: HouseholdKeys, text: string, language: Langu
         const next = await reader.read();
         if (next.done) break;
         length += next.value.byteLength;
-        if (length > MAX_MP3_RESPONSE_BYTES) {
+        if (length > MAX_AUDIO_RESPONSE_BYTES) {
           await reader.cancel();
           throw new Error();
         }
@@ -69,7 +69,7 @@ export async function postMp3(keys: HouseholdKeys, text: string, language: Langu
       bytes.set(chunk, at);
       at += chunk.length;
     }
-    assertMp3(bytes);
+    assertAac(bytes);
     return bytes;
   } catch (failure) {
     if (failure instanceof ServerError) throw failure;

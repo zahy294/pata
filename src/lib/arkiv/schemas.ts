@@ -5,3 +5,4 @@ export const homeSchema = defineSchema(ARKIV_SCHEMAS.home, { sealed: bytes() });
 export const voiceSchema = defineSchema(ARKIV_SCHEMAS.voice, { sealed: bytes() });
 export const grantSchema = defineSchema(ARKIV_SCHEMAS.grant, { payload: bytes(), index: bytes() });
 export const historySchema = defineSchema(ARKIV_SCHEMAS.history, { sealed: bytes() });
+export const grantAudioSchema = defineSchema(ARKIV_SCHEMAS.grantAudio, { sealed: bytes() });

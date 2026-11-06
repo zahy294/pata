@@ -1,11 +1,12 @@
-// Arkiv records: four types, sealed bytes columns only. Owner: blockchain.
+// Arkiv records: five types, sealed bytes columns only. Owner: blockchain.
 // Read docs/research/arkiv.md first. SDK 1.0.0 only: older examples (and AI-written code) use the
 // pre-1.0 payload API. Log every surprise in arkiv/friction.md, one line each.
 //
 // pata.home.v1     household-sealed HomeRecord, 182 days, patchable          (P0-8)
-// pata.voice.v1    household-sealed MP3 clip, one per language, 182 days     (P0-9, ADR 0007)
+// pata.voice.v1    household-sealed AAC clip, one per language, 182 days     (P0-9, ADR 0007)
 // pata.grant.v1    session-sealed GrantPayload, expires atDate(grantEnd)     (P0-10)
 // pata.history.v1  household-sealed HistoryEntry, readonly, 182 days         (P0-10, P0-12)
+// pata.grant-audio.v1  session-sealed AAC clip for one grant, its own create (P0-10)
 //
 // Every query filters ownedBy(household): anyone can write under our schema tags (arkiv.md Gotcha 2).
 //
@@ -15,15 +16,18 @@
 // key isn't known until the batch lands, so the history entry can't carry it; the index lets the
 // household's own owner query build the live-access list and revoke (label + payload key) with no
 // local state. Nothing readable is public either way.
+//
+// A ~20 s clip fills a whole 128 KiB entity, so it can't share the payload's budget: approval creates the
+// grant's audio entity first, and the payload and index carry its key. Revoke deletes both.
 import type { GrantPayload, HistoryEntry, HomeRecord, Language, LiveGrant } from "../../../shared/domain";
 import type { HouseholdKeys } from "../keys";
 import { ExpirationTime, NoEntityFoundError } from "@arkiv-network/sdk";
 import { bytes } from "@arkiv-network/sdk/schema";
 import { hexToBytes } from "viem";
-import { ARKIV_MAX_DAYS, ARKIV_MAX_BYTES } from "../../../shared/constants";
+import { ARKIV_MAX_DAYS, ARKIV_MAX_BYTES, MAX_VOICE_CLIP_BYTES } from "../../../shared/constants";
 import { arkivPublicClient, arkivWalletClient } from "../rpc";
 import { openJson, sealJson, openBytes, sealBytes } from "../seal";
-import { homeSchema, voiceSchema, grantSchema, historySchema } from "./schemas";
+import { homeSchema, voiceSchema, grantSchema, historySchema, grantAudioSchema } from "./schemas";
 import { canonicalJson, findSealedRecord } from "./reuse";
 import { asc } from "@arkiv-network/sdk/query";
 import { loadHouseholdState } from "../keys/store";
@@ -64,19 +68,19 @@ export async function readHomeRecord(keys: HouseholdKeys, key: EntityKey): Promi
 export async function createVoiceRecord(
   keys: HouseholdKeys,
   language: Language,
-  mp3: Uint8Array,
+  clip: Uint8Array,
 ): Promise<EntityKey> {
   // Language is already associated with this entity key in the sealed home record.
   void language;
   try {
     const existing = await findSealedRecord(keys, voiceSchema, async (sealed) => {
       const opened = await openBytes(keys.sealKey, sealed);
-      return opened.length === mp3.length && opened.every((value, index) => value === mp3[index]);
+      return opened.length === clip.length && opened.every((value, index) => value === clip[index]);
     });
     if (existing) return existing;
     const result = await arkivWalletClient(keys.account).createEntity(
       voiceSchema,
-      { sealed: bytes(await sealBytes(keys.sealKey, mp3)) },
+      { sealed: bytes(await sealBytes(keys.sealKey, clip)) },
       { expiration: ExpirationTime.fromDays(ARKIV_MAX_DAYS) },
     );
     return result.entityKey;
@@ -92,6 +96,54 @@ export async function readVoiceRecord(keys: HouseholdKeys, key: EntityKey): Prom
     return await openBytes(keys.sealKey, hexToBytes(row.sealed.value));
   } catch {
     throw new Error("Could not read voice record");
+  }
+}
+
+/** One grant's AAC clip, sealed to its session key; expires at `expiresAt` (Unix seconds). */
+export async function createGrantAudio(
+  keys: HouseholdKeys,
+  sessionSealKey: CryptoKey,
+  clip: Uint8Array,
+  expiresAt: number,
+): Promise<EntityKey> {
+  try {
+    if (clip.length === 0 || clip.length > MAX_VOICE_CLIP_BYTES || !Number.isSafeInteger(expiresAt))
+      throw new Error("Invalid grant audio");
+    const result = await arkivWalletClient(keys.account).createEntity(
+      grantAudioSchema,
+      { sealed: bytes(await sealBytes(sessionSealKey, clip)) },
+      { expiration: ExpirationTime.atDate(new Date(expiresAt * 1000)) },
+    );
+    return result.entityKey;
+  } catch {
+    throw new Error("Could not create grant audio");
+  }
+}
+
+/** Courier view. Null when missing, expired, deleted or owned by someone other than the household. */
+export async function readGrantAudio(
+  audioKey: EntityKey,
+  sessionSealKey: CryptoKey,
+  expectedOwner: `0x${string}`,
+): Promise<Uint8Array | null> {
+  try {
+    const row = await arkivPublicClient().getEntity(audioKey, grantAudioSchema);
+    if (row.$owner.toLowerCase() !== expectedOwner.toLowerCase()) return null;
+    return await openBytes(sessionSealKey, hexToBytes(row.sealed.value));
+  } catch (error) {
+    if (error instanceof NoEntityFoundError) return null;
+    throw new Error("Could not read grant audio");
+  }
+}
+
+export async function deleteGrantAudio(keys: HouseholdKeys, audioKey: EntityKey): Promise<void> {
+  try {
+    const row = await arkivPublicClient().getEntity(audioKey, grantAudioSchema);
+    if (row.$owner.toLowerCase() !== keys.address.toLowerCase()) throw new Error("Wrong owner");
+    await arkivWalletClient(keys.account).deleteEntity({ entityKey: audioKey });
+  } catch (error) {
+    if (error instanceof NoEntityFoundError) return;
+    throw new Error("Could not delete grant audio");
   }
 }
 
@@ -111,7 +163,8 @@ export async function createGrantBatch(
       canonicalJson(issued.requester) !== canonicalJson(payload.requester) ||
       !/^[a-z2-7]{8}$/.test(issued.grantLabel) ||
       !Number.isSafeInteger(payload.grantEnd) ||
-      payload.grantEnd <= issued.at
+      payload.grantEnd <= issued.at ||
+      (payload.audioKey !== undefined && !/^0x[\da-fA-F]{64}$/.test(payload.audioKey))
     )
       throw new Error("Invalid grant batch");
     const index = {
@@ -119,6 +172,7 @@ export async function createGrantBatch(
       requester: issued.requester,
       purpose: issued.purpose,
       grantEnd: issued.grantEnd,
+      ...(payload.audioKey ? { audioKey: payload.audioKey } : {}),
     };
     const [sealedPayload, sealedIndex, sealedHistory] = await Promise.all([
       sealJson(sessionSealKey, payload),
@@ -236,7 +290,8 @@ export async function listLiveGrants(keys: HouseholdKeys, householdName?: string
             !/^[a-z2-7]{8}$/.test(index.grantLabel) ||
             !Number.isSafeInteger(index.grantEnd) ||
             typeof index.purpose !== "string" ||
-            typeof index.requester?.displayName !== "string"
+            typeof index.requester?.displayName !== "string" ||
+            (index.audioKey !== undefined && !/^0x[\da-fA-F]{64}$/.test(index.audioKey))
           )
             continue;
         } catch {

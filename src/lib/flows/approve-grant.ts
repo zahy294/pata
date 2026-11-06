@@ -1,18 +1,20 @@
 // "Approve a grant" (docs/plan.md, P0-10). Owner: blockchain. Frontend calls it from the consent screen.
 // 1. newSessionKey → deriveGrantIdentity (label, owner, seal key).
 // 2. grantEnd = latest Sepolia block time + durationSeconds + GRANT_LATENCY_MARGIN_SECONDS.
-// 3. Arkiv batch: payload (sealed to the session key, atDate(grantEnd)) + "issued" history entry.
+// 3. Arkiv: the grant's audio entity (sealed to the session key; its own create, since a clip fills an
+//    entity), then one batch: payload (sealed to the session key, atDate(grantEnd)) + "issued" history.
 // 4. Sepolia: mintGrant(label, owner, grantEnd) in the household's grant registry.
 // 5. Courier link from ../link. The session key is then dropped from memory.
 import type { GrantRequest } from "../../../shared/domain";
 import type { HouseholdKeys } from "../keys";
 import type { HouseholdState } from "../keys/store";
 import { deriveGrantIdentity, newSessionKey, type GrantIdentity } from "../keys";
-import { readHomeRecord, readVoiceRecord, createGrantBatch } from "../arkiv";
+import { readHomeRecord, readVoiceRecord, createGrantAudio, createGrantBatch } from "../arkiv";
 import { mintGrant, sepoliaNow } from "../ens/grants";
 import { calculateGrantEnd, buildGrantPayload } from "./grant-data";
 import { formatCourierLink } from "../link";
 import { toHex } from "viem";
+import { GRANT_AUDIO_EXPIRY_MARGIN_SECONDS } from "../../../shared/constants";
 
 export interface ApprovedGrant {
   courierLink: string;
@@ -43,7 +45,10 @@ export async function approveGrant(
     const voice = voiceKey ? await readVoiceRecord(keys, voiceKey) : null;
     const now = await sepoliaNow();
     let grantEnd = calculateGrantEnd(now, request.durationSeconds);
-    const payload = buildGrantPayload(home, request, voice, grantEnd);
+    const audioKey = voice
+      ? await createGrantAudio(keys, identity.sealKey, voice, grantEnd + GRANT_AUDIO_EXPIRY_MARGIN_SECONDS)
+      : null;
+    const payload = buildGrantPayload(home, request, audioKey, grantEnd);
     const issued = {
       version: 1 as const,
       kind: "issued" as const,
@@ -58,7 +63,7 @@ export async function approveGrant(
       refreshGrantEnd: async () => {
         const freshNow = await sepoliaNow();
         const freshEnd = Math.max(grantEnd + 1, calculateGrantEnd(freshNow, request.durationSeconds));
-        const freshPayload = buildGrantPayload(home, request, voice, freshEnd);
+        const freshPayload = buildGrantPayload(home, request, audioKey, freshEnd);
         const freshIssued = { ...issued, at: freshNow, grantEnd: freshEnd };
         // The old payload expires at its old deadline; replace its unissued history atomically.
         batch = await createGrantBatch(keys, identity!.sealKey, freshPayload, freshIssued, batch.historyKey);

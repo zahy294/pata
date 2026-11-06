@@ -3,21 +3,25 @@
 // 2. Show the locality at once (lookupLocality).
 // 3. ENS check: grantStatusByName(<label>.<household>) owner must equal the owner derived from the session key.
 // 4. Read the payload; its Arkiv $owner must equal householdOwner(household name). Missing → ended.
+//    Its audio entity is read once per link and kept for this page (a clip is up to 128 KiB).
 // 5. Poll both every few seconds; whichever ends first → "ended", clear sessionStorage.
 import type { GrantPayload, Locality } from "../../../shared/domain";
 import { parseCourierFragment } from "../link";
 import { lookupLocality, householdOwner } from "../ens/lookup";
 import { grantStatusByName } from "../ens/grants";
 import { deriveGrantIdentity } from "../keys";
-import { readGrantPayload } from "../arkiv";
+import { readGrantPayload, readGrantAudio } from "../arkiv";
 import { PROVIDER_NAME } from "../../../shared/constants";
 import { isValidHouseholdLabel } from "../ens/names";
 
 export type CourierView =
   | { state: "checking"; locality: Locality | null }
-  | { state: "live"; locality: Locality; payload: GrantPayload }
+  /** audio: AAC bytes (audio/aac); null → read payload.directions with speechSynthesis (ADR 0007). */
+  | { state: "live"; locality: Locality; payload: GrantPayload; audio: Uint8Array | null }
   | { state: "ended"; locality: Locality | null }
   | { state: "invalid" };
+
+const audioByPayload = new Map<string, Uint8Array | null>();
 
 /** One check of both signals. The /c page calls it on load and on a timer. */
 export async function checkCourierLink(fragmentOrStored: string): Promise<CourierView> {
@@ -42,13 +46,28 @@ export async function checkCourierLink(fragmentOrStored: string): Promise<Courie
   try {
     const identity = await deriveGrantIdentity(link.sessionKey);
     const status = await grantStatusByName(`${identity.label}.${link.householdName}`);
-    if (!status.live || status.owner.toLowerCase() !== identity.owner.address.toLowerCase())
-      return { state: "ended", locality };
+    const ended = () => {
+      audioByPayload.delete(link.payloadKey);
+      return { state: "ended" as const, locality };
+    };
+    if (!status.live || status.owner.toLowerCase() !== identity.owner.address.toLowerCase()) return ended();
     const owner = await householdOwner(link.householdName);
-    if (!owner) return { state: "ended", locality };
+    if (!owner) return ended();
     const opened = await readGrantPayload(link.payloadKey, identity.sealKey, owner);
-    if (!opened) return { state: "ended", locality };
-    return locality ? { state: "live", locality, payload: opened.payload } : { state: "checking", locality };
+    if (!opened) return ended();
+    const { audioKey } = opened.payload;
+    // An RPC failure throws (→ checking) and is retried; a missing clip is remembered as null.
+    if (!audioByPayload.has(link.payloadKey))
+      audioByPayload.set(
+        link.payloadKey,
+        audioKey && /^0x[\da-fA-F]{64}$/.test(audioKey)
+          ? await readGrantAudio(audioKey, identity.sealKey, owner)
+          : null,
+      );
+    const audio = audioByPayload.get(link.payloadKey) ?? null;
+    return locality
+      ? { state: "live", locality, payload: opened.payload, audio }
+      : { state: "checking", locality };
   } catch {
     return { state: "checking", locality };
   } finally {

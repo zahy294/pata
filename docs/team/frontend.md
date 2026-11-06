@@ -44,7 +44,7 @@ Build src/app/setup/page.tsx as a step-by-step flow following the comment at the
 2. "How do people find your door?": src/components/Recorder.tsx (MediaRecorder, max 30 s, shows a timer) OR a textarea; language picker hi/mr/en; a SEPARATE input "Room or flat number" with the note "Stays on this phone". → flows.describeTheWay(keys, blobOrText, language). If locality is null, ask for the area and PIN code.
 3. → flows.findCandidatePins(...). src/components/PinPicker.tsx shows up to 3 candidates on MapView with landmark name, relation and confidence (low/medium/high as words, not numbers). Empty → "Drop a pin on your door" on the locality's bbox. The household can drag any pin.
 4. Confirm → show the DIGIPIN with formatDigipin from src/lib/digipin.
-5. → flows.makeDirections(...): show the three directions texts with play buttons (AudioPlayer). A language missing from `clips` plays with speechSynthesis; pass `clips` to createHousehold as `voiceClips` unchanged.
+5. → flows.makeDirections(...): show the three directions texts with play buttons (AudioPlayer). Clips are AAC (`audio/aac`), not MP3. A language missing from `clips` plays with speechSynthesis; pass `clips` to createHousehold as `voiceClips` unchanged.
 6. Name: flows.suggestHouseholdLabel() as a default, an input for her own with the rule from isValidHouseholdLabel (ADR 0006) and a warning that names are public; check availability with flows.checkHouseholdName ("available", "taken" or "invalid").
 7. → flows.createHousehold(...) with a progress list ("Reserving your name…", "Saving your home, locked…"). Then go to /.
 Use src/lib/flows/fake.ts until the real flows land. Every async step needs a loading state and a retry button; errors show a plain sentence, never a raw error message (it may contain request bodies).
@@ -70,7 +70,7 @@ Ticket: P0-11 (screen). Write docs/plans/P0-11-screen.md first and commit it.
 Build src/app/c/page.tsx following its header comment exactly:
 1. In useEffect: read location.hash; if present save it to sessionStorage and call history.replaceState(null, "", location.pathname) to remove it; else read it back from sessionStorage.
 2. Show the locality as soon as checkCourierLink returns it.
-3. Poll checkCourierLink every 3 seconds. live → MapView with the pin, the DIGIPIN, room number, written address, directions text and AudioPlayer (mp3Base64, fallback speechSynthesis in the payload's language). ended → clear sessionStorage, show only the locality and "This link has ended". invalid → "This link doesn't work".
+3. Poll checkCourierLink every 3 seconds. live → MapView with the pin, the DIGIPIN, room number, written address, directions text and AudioPlayer (the view's `audio` bytes as `audio/aac`; when `audio` is null, speechSynthesis in the payload's language). ended → clear sessionStorage, show only the locality and "This link has ended". invalid → "This link doesn't work".
 4. It must stay usable on a slow 4G phone: text first, map after.
 5. Playwright (e2e/courier.spec.ts): replace the fixme tests that can run with the fake flow; keep the CROPS network test for the owner.
 Done when the fake live → ended transition works on a phone. Commit, push.

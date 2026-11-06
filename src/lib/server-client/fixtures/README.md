@@ -29,11 +29,11 @@ Format references: [Matroska elements](https://www.matroska.org/technical/elemen
 
 ## TTS transport fixture (P0-9)
 
-`tts-silence-16000.mp3` is generated silence, independently probed as MP3 at 16 kHz, 0.250000 seconds, 1,520 bytes. Reproduce it with:
+`tts-silence-8000.aac` is generated silence: ADTS AAC LC at 8 kHz mono, 2 seconds, 204 bytes (Sarvam's `aac` output at 8 kHz has the same header, `ff f1 6c 40`). Reproduce it with:
 
 ```bash
-ffmpeg -hide_banner -loglevel error -y -f lavfi -i anullsrc=r=16000:cl=mono -t 0.25 -c:a libmp3lame -b:a 32k src/lib/server-client/fixtures/tts-silence-16000.mp3
-ffprobe -v error -show_entries stream=codec_name,sample_rate -show_entries format=duration,size -of json src/lib/server-client/fixtures/tts-silence-16000.mp3
+ffmpeg -hide_banner -loglevel error -y -f lavfi -i anullsrc=r=8000:cl=mono -t 2 -c:a aac -b:a 24k -f adts src/lib/server-client/fixtures/tts-silence-8000.aac
+ffprobe -v error -show_entries stream=codec_name,profile,sample_rate -show_entries format=duration,size -of json src/lib/server-client/fixtures/tts-silence-8000.aac
 ```
 
 This fixture verifies raw-byte transport and format checks, not real Sarvam voice quality, 20-second size or phone playback. Oversize tests pad these bytes solely to exercise storage budget decisions. MP3 validation checks a bounded ID3 prefix and first MPEG-2 Layer III / 16-kHz frame header; it is not a full audio decoder.
