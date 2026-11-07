@@ -5,6 +5,7 @@
 // 3. Hand-off: the consent screen sends the courier link back here after "#" (ADR 0013). The link is kept
 //    in sessionStorage only, like the courier view's (ADR 0006), and the seller can prove it holds it.
 import { useEffect, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import Link from "next/link";
 import { LANGUAGES, type Language } from "../../../shared/domain";
 import {
@@ -195,7 +196,7 @@ export default function SellerPage() {
 
       {!loaded && (
         <section className="flex items-center gap-3 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 text-sm shadow-xs">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+          <MorphLoader size={24} color="#046A38" />
           <span>Opening the shop…</span>
         </section>
       )}
@@ -417,7 +418,7 @@ export default function SellerPage() {
           >
             {settingUp && step ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                <MorphLoader />
                 <span>{STEP_WORDS[step]}</span>
               </>
             ) : setupError ? (

@@ -9,6 +9,7 @@
 //      ended → only the locality, sessionStorage cleared; invalid → "This link doesn't work".
 // Must work on a slow 4G phone (hour-0 test): locality first, the pin once the ENS check passes.
 import { useEffect, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import MapView from "../../components/MapView";
 import AudioPlayer from "../../components/AudioPlayer";
 import { formatDigipin } from "../../lib/digipin";
@@ -184,7 +185,7 @@ export default function CourierPage() {
       {/* CHECKING STATE */}
       {view.state === "checking" && (
         <section className="flex items-center gap-3 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4 text-sm text-[#1F1C18] shadow-xs">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+          <MorphLoader size={24} color="#046A38" />
           <span>Unlocking doorstep directions…</span>
         </section>
       )}

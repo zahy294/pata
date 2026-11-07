@@ -1,0 +1,82 @@
+# Scoped Hue model for the approved intro, not a replacement for the app's design system.
+name: Pata wordmark handoff
+reference: https://www.instagram.com/p/De1gtsHD0zB/
+observed: Warm cream, oversized editorial lettering, fine rules; caption discusses transitions.
+limitation: Original Instagram video unavailable. Later steering uses the supplied Swiggy recording and explicit top-left wordmark handoff.
+steering: App icon uses the bottom-right green tile reference. Intro uses only normal cream Pata lettering, no chrome finish.
+voice: Warm, direct, household-led.
+colors:
+  canvas: "#123B2B"
+  cream: "#FAF5EC"
+  muted: "#C6D3C5"
+  gold: "#E4C07A"
+  brandGreen: "#046A38"
+type:
+  display: Georgia, Times New Roman, serif
+  body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif
+  displaySize: clamp(96px, 26vw, 156px)
+  headingSize: clamp(28px, 6vw, 36px)
+  bodySize: 15px
+  labelSize: 12px
+spacing: [4, 8, 12, 16, 24, 32, 40, 48, 64, 96]
+hero_stage:
+  preset: flat-blank
+  subject: composition
+  form: Oversized cream Pata lettering inside a fine doorway outline.
+  relation: flat
+  medium: absent
+  motion: The same Pata lettering travels into the real top-left app header while a circular opening expands from Enter Pata.
+intro_content:
+  topLeft: Landscape app icon
+  topRight: पता
+  wordmark: Pata
+  tagline: Your door. Your say.
+  action: Enter Pata
+  secondaryCopy: None
+responsive_layout:
+  contentMaxPx: 1120
+  pageGutter: clamp(20px, 4vw, 48px)
+  appHeading: clamp(22px, 2.1vw, 28px)
+  laptopBreakpointPx: 900
+  laptopPanels: Side by side when parallel; reading and form widths stay bounded
+  phonePanels: Stacked, with consistent outer gutters
+motion:
+  wordmarkDurationMs: 900
+  surfaceDurationMs: 820
+  peripheralExitMs: 380
+  colorDurationMs: 120
+  colorDelay: Centered on when the expanding circle reaches the traveling wordmark, measured from native easing progress
+  completionFallbackMs: 1200
+  easing: cubic-bezier(0.65, 0, 0.2, 1)
+  destination: Measured bounds of .pata-header-wordmark, matching Georgia, weight, tracking and line-height
+  surface: One smooth circular aperture expands from the Enter Pata button center to beyond the farthest viewport corner
+  continuity: Same visible wordmark throughout; only the destination text is hidden during flight
+  reduced: Instant entry, including when the preference changes mid-flight
+  interruption: Escape, resize or unavailable animation APIs finish immediately and restore header text
+page_reveal:
+  durationMs: 300
+  easing: cubic-bezier(0.16, 1, 0.3, 1)
+  content: Opacity 0.94 to 1; upward settle from 6px to 0
+  accent: 3px green-and-gold door jamb, 120px tall, beside the content gutter
+  header: Stationary
+  trigger: Pathname changes only, skip direct loads
+  lifecycle: Cancel on the next route, unmount or reduced-motion preference change
+  reduced: No reveal; navigation remains immediate
+  fallback: Fully visible content without browser animation support
+behavior:
+  route: Home only
+  persistence: sessionStorage, best effort
+  entry: Tap or keyboard; Escape enters immediately
+  failure: Storage errors never block entry; animation has a completion fallback
+loader:
+  shapes: [soft-burst, cookie-9-sided, pentagon, pill, sunny, cookie-4-sided, oval, location, flower]
+  icon: /icons/loading-location.png
+  controlSizePx: 20
+  panelSizePx: 24
+  mapSizePx: 28
+  cycleStepMs: 850
+  morphDurationMs: 440
+  crossfadeMs: 160
+  color: Inherit control foreground; brand green or gold on light panels
+  reduced: Still location icon
+  background: Pause when document is hidden

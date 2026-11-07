@@ -4,6 +4,7 @@
 // so the page polls (arkiv.md Gotcha 3): one check at a time, paused while the page is hidden, and a
 // failed check keeps the last list on screen rather than showing it empty.
 import { useCallback, useEffect, useRef, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import Link from "next/link";
 import type { LiveGrant } from "../../../shared/domain";
 import type { HouseholdKeys } from "../../lib/keys";
@@ -169,7 +170,7 @@ export default function AccessPage() {
 
       {household && grants === null && !loadError && (
         <section className="flex items-center gap-3 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 text-sm text-[#1F1C18] shadow-xs">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+          <MorphLoader size={24} color="#046A38" />
           <span>Checking who can find your door…</span>
         </section>
       )}
@@ -252,7 +253,7 @@ export default function AccessPage() {
                 >
                   {stop?.state === "stopping" ? (
                     <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#8A2522] border-t-transparent" />
+                      <MorphLoader color="#8A2522" />
                       <span>Stopping access…</span>
                     </>
                   ) : stop?.state === "failed" ? (

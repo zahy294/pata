@@ -3,6 +3,7 @@
 // A household name → only its locality ("Dharavi, 400017").
 // A grid name (39j49ll8t4.digipin.eth) → the cell centre on the map, with nothing registered (P1-1).
 import { Suspense, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import { useSearchParams } from "next/navigation";
 import { lookupHousehold } from "../../lib/flows/lookup";
 import { formatDigipin, isValidDigipin, toGridLabel } from "../../lib/digipin";
@@ -80,7 +81,7 @@ export default function LookupPage() {
   };
 
   return (
-    <main className="flex flex-col gap-5 pb-10">
+    <main className="pata-lookup-page flex flex-col gap-5 pb-10">
       <div className="flex flex-col gap-1">
         <span className="inline-flex self-start items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
           Public Directory
@@ -124,9 +125,9 @@ export default function LookupPage() {
           <button
             type="submit"
             disabled={result.kind === "loading" || !query.trim()}
-            className="rounded-xl bg-[#046A38] px-4 py-2.5 text-sm font-semibold text-[#FFFDF9] shadow-xs transition hover:bg-[#03562D] disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#046A38] px-4 py-2.5 text-sm font-semibold text-[#FFFDF9] shadow-xs transition hover:bg-[#03562D] disabled:opacity-50"
           >
-            {result.kind === "loading" ? "Searching…" : "Look up"}
+            {result.kind === "loading" ? <><MorphLoader />Searching…</> : "Look up"}
           </button>
         </div>
       </form>
@@ -134,7 +135,7 @@ export default function LookupPage() {
       {/* Loading */}
       {result.kind === "loading" && (
         <section className="flex items-center gap-3 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4 text-sm text-[#1F1C18] shadow-xs">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+          <MorphLoader size={24} color="#046A38" />
           <span>Looking up public neighbourhood record…</span>
         </section>
       )}
@@ -268,7 +269,7 @@ function RpcDiagnostics() {
         disabled={running}
         onClick={runChecks}
       >
-        {running ? "Checking private RPC…" : "Run private RPC read checks"}
+        {running ? <span className="inline-flex items-center gap-2"><MorphLoader />Checking private RPC…</span> : "Run private RPC read checks"}
       </button>
       {error && <p role="alert">{error}</p>}
       {report && (

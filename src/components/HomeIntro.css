@@ -1,0 +1,201 @@
+.pata-intro {
+  --intro-bg: #123b2b;
+  --intro-cream: #faf5ec;
+  --intro-gold: #e4c07a;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100svh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 0;
+  background: transparent;
+  color: var(--intro-cream);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  overscroll-behavior: contain;
+}
+.pata-intro::backdrop {
+  background: transparent;
+}
+.pata-intro__surface {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.pata-intro__aperture {
+  transform: scale(0);
+  transform-origin: 0 0;
+}
+.pata-intro__composition {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 100%;
+  width: min(100%, 1120px);
+  margin-inline: auto;
+  padding: max(24px, env(safe-area-inset-top)) clamp(24px, 4vw, 48px) max(24px, env(safe-area-inset-bottom));
+}
+.pata-intro[data-opening="true"] .pata-intro__composition {
+  pointer-events: none;
+}
+.pata-intro__masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgb(228 192 122 / 23%);
+}
+.pata-intro__logo {
+  width: 48px;
+  height: 48px;
+}
+.pata-intro__hindi {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 32px;
+  line-height: 1;
+}
+.pata-intro__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding-block: 32px;
+}
+.pata-intro__hero {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: clamp(220px, 36svh, 340px);
+  width: min(100%, 480px);
+}
+.pata-intro__doorway {
+  position: absolute;
+  height: 100%;
+  width: min(88%, 320px);
+  stroke: var(--intro-gold);
+  stroke-opacity: 0.28;
+  stroke-width: 0.8;
+}
+.pata-intro__wordmark {
+  position: relative;
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(96px, 26vw, 156px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.pata-intro__message {
+  text-align: center;
+}
+.pata-intro__message h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(28px, 6vw, 36px);
+  line-height: 1.15;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+.pata-intro__message em {
+  color: var(--intro-gold);
+  font-weight: 400;
+}
+.pata-intro__actions {
+  width: 100%;
+  max-width: 320px;
+  justify-self: center;
+}
+.pata-intro__enter {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 8px 8px 8px 24px;
+  border: 1px solid var(--intro-cream);
+  border-radius: 999px;
+  background: var(--intro-cream);
+  color: var(--intro-bg);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pata-intro__enter:active {
+  transform: scale(0.98);
+}
+.pata-intro__enter:disabled {
+  cursor: wait;
+}
+.pata-intro__enter:focus-visible {
+  outline: 2px solid var(--intro-gold);
+  outline-offset: 6px;
+}
+.pata-intro__arrow {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  place-items: center;
+  background: var(--intro-bg);
+  color: var(--intro-cream);
+}
+.pata-intro__arrow svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (hover: hover) {
+  .pata-intro__enter:hover {
+    background-color: #ffe4a8;
+  }
+}
+@media (min-width: 900px) {
+  .pata-intro__composition {
+    padding-block: 40px;
+  }
+  .pata-intro__hindi {
+    font-size: 36px;
+  }
+}
+@media (max-height: 620px) {
+  .pata-intro__composition {
+    padding-block: 16px;
+  }
+  .pata-intro__center {
+    gap: 16px;
+    padding-block: 16px;
+  }
+  .pata-intro__hero {
+    height: 190px;
+  }
+  .pata-intro__message h2 {
+    font-size: 28px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pata-intro__enter {
+    transition: none;
+  }
+}

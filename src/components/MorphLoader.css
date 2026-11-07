@@ -1,0 +1,29 @@
+.pata-morph-loader {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+}
+.pata-morph-loader__shape {
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  transition:
+    clip-path 440ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 440ms ease,
+    opacity 160ms ease;
+}
+.pata-morph-loader__pin {
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  mask: url("/icons/loading-location.png") center / contain no-repeat;
+  -webkit-mask: url("/icons/loading-location.png") center / contain no-repeat;
+  transition: opacity 160ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pata-morph-loader__shape,
+  .pata-morph-loader__pin {
+    transition: none;
+  }
+}

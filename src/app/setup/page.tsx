@@ -16,6 +16,7 @@
 // 7. → flows.createHousehold(...) with a progress list ("Reserving your name…", "Saving your home, locked…").
 //    Then go to /.
 import { useEffect, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import { useRouter } from "next/navigation";
 import PinPicker from "../../components/PinPicker";
 import AudioPlayer from "../../components/AudioPlayer";
@@ -55,6 +56,9 @@ export default function SetupPage() {
 
   // Step 1: Sign in
   const [screen, setScreen] = useState<FlowScreen>("signin");
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [screen]);
   const [keys, setKeys] = useState<HouseholdKeys | null>(null);
   const [signInLoading, setSignInLoading] = useState(true);
   const [signInError, setSignInError] = useState<string | null>(null);
@@ -81,9 +85,7 @@ export default function SetupPage() {
 
   // Step 4 & 5: Confirmed pin + DIGIPIN + Directions
   const [confirmedPin, setConfirmedPin] = useState<LatLon | null>(null);
-  const [chosenCandidate, setChosenCandidate] = useState<CandidatePin | null>(
-    null,
-  );
+  const [chosenCandidate, setChosenCandidate] = useState<CandidatePin | null>(null);
   const [digipinCopied, setDigipinCopied] = useState(false);
   const [directionsLoading, setDirectionsLoading] = useState(false);
   const [directionsError, setDirectionsError] = useState<string | null>(null);
@@ -115,9 +117,7 @@ export default function SetupPage() {
       setLabelInput(initialSuggestion);
       setScreen("describe");
     } catch {
-      setSignInError(
-        "Could not prepare your device keys. Please tap Retry to try again.",
-      );
+      setSignInError("Could not prepare your device keys. Please tap Retry to try again.");
     } finally {
       setSignInLoading(false);
     }
@@ -137,12 +137,7 @@ export default function SetupPage() {
     setPinsLoading(true);
     setPinsError(null);
     try {
-      const ranked = await flows.findCandidatePins(
-        activeKeys,
-        way,
-        loc,
-        phrases,
-      );
+      const ranked = await flows.findCandidatePins(activeKeys, way, loc, phrases);
       setCandidates(ranked.candidates);
       setBbox(ranked.bbox);
       setScreen("pin");
@@ -153,9 +148,7 @@ export default function SetupPage() {
           `We couldn't find "${loc.name}, ${loc.pinCode}" on the map. Check the area and PIN code above, or use your location.`,
         );
       } else {
-        setPinsError(
-          "We could not search for nearby landmarks right now. Please tap Retry.",
-        );
+        setPinsError("We could not search for nearby landmarks right now. Please tap Retry.");
       }
     } finally {
       setPinsLoading(false);
@@ -209,19 +202,11 @@ export default function SetupPage() {
       setScreen("pin");
       return;
     }
-    await runFindCandidatePins(
-      keys,
-      typed.wayToTheDoor,
-      typed.locality,
-      typed.landmarkPhrases,
-    );
+    await runFindCandidatePins(keys, typed.wayToTheDoor, typed.locality, typed.landmarkPhrases);
   };
 
   // Step 5 helper: makeDirections
-  const runMakeDirections = async (
-    pin: LatLon,
-    chosen: CandidatePin | null,
-  ) => {
+  const runMakeDirections = async (pin: LatLon, chosen: CandidatePin | null) => {
     if (!keys) return;
     setDirectionsLoading(true);
     setDirectionsError(null);
@@ -233,17 +218,10 @@ export default function SetupPage() {
             relation: c.relation,
           }));
 
-      const res = await flows.makeDirections(
-        keys,
-        wayToTheDoor,
-        pin,
-        landmarksArg,
-      );
+      const res = await flows.makeDirections(keys, wayToTheDoor, pin, landmarksArg);
       setDirections(res.directions);
     } catch {
-      setDirectionsError(
-        "Could not write the directions right now. Please tap Retry.",
-      );
+      setDirectionsError("Could not write the directions right now. Please tap Retry.");
     } finally {
       setDirectionsLoading(false);
     }
@@ -292,9 +270,7 @@ export default function SetupPage() {
     if (!keys || !locality || !confirmedPin || !directions) return;
     const normalizedLabel = labelInput.trim().toLowerCase();
     if (!flows.isValidHouseholdLabel(normalizedLabel)) {
-      setCreateError(
-        "Use 3–32 lowercase letters, numbers, or single hyphens.",
-      );
+      setCreateError("Use 3–32 lowercase letters, numbers, or single hyphens.");
       return;
     }
 
@@ -329,9 +305,7 @@ export default function SetupPage() {
     }
   };
 
-  const formattedDigipin = confirmedPin
-    ? formatDigipin(encodeDigipin(confirmedPin))
-    : "";
+  const formattedDigipin = confirmedPin ? formatDigipin(encodeDigipin(confirmedPin)) : "";
 
   const normalizedLabel = labelInput.trim().toLowerCase();
   const isLabelValid = flows.isValidHouseholdLabel(normalizedLabel);
@@ -350,30 +324,24 @@ export default function SetupPage() {
       createStep === "resolve");
   const isSavingDone = createStep === "complete";
   const isSavingActive =
-    creating &&
-    (createStep === "voice-records" ||
-      createStep === "home-record" ||
-      createStep === "save");
+    creating && (createStep === "voice-records" || createStep === "home-record" || createStep === "save");
 
   return (
-    <main className="flex flex-col gap-5 pb-8">
+    <main className="pata-setup-page flex flex-col gap-5 pb-8">
       {/* STEP 1: SIGN IN */}
       {screen === "signin" && (
         <section className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-6 shadow-sm">
           <span className="inline-flex items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
             Step 1 of 4 • Device Key
           </span>
-          <h1 className="mt-3 font-serif text-2xl font-bold text-[#1F1C18]">
-            Set up your home
-          </h1>
+          <h1 className="mt-3 font-serif text-2xl font-bold text-[#1F1C18]">Set up your home</h1>
           <p className="mt-1.5 text-sm leading-relaxed text-[#6E655A]">
-            Creating a private key on this phone so only you can unlock your
-            exact doorstep.
+            Creating a private key on this phone so only you can unlock your exact doorstep.
           </p>
 
           {signInLoading && (
             <div className="mt-5 flex items-center gap-3 rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-4 text-sm font-medium text-[#1F1C18]">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+              <MorphLoader size={24} color="#046A38" />
               <span>Preparing your private device key…</span>
             </div>
           )}
@@ -404,8 +372,7 @@ export default function SetupPage() {
               Where is your home?
             </h1>
             <p className="text-sm text-[#6E655A]">
-              Use your location, or type a nearby landmark. Only your area and
-              PIN code are public.
+              Use your location, or type a nearby landmark. Only your area and PIN code are public.
             </p>
           </div>
 
@@ -419,17 +386,13 @@ export default function SetupPage() {
             >
               {locating ? (
                 <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+                  <MorphLoader size={24} color="#046A38" />
                   <span>Finding your location…</span>
                 </>
               ) : (
                 <>
                   <span aria-hidden="true">📍</span>
-                  <span>
-                    {homeFix
-                      ? "Location found · Try again"
-                      : "Use my current location"}
-                  </span>
+                  <span>{homeFix ? "Location found · Try again" : "Use my current location"}</span>
                 </>
               )}
             </button>
@@ -438,21 +401,14 @@ export default function SetupPage() {
                 ? `Within about ${Math.round(homeFix.accuracyMetres)} m.${filledFromLocation ? " We filled in what we could from it, on this phone: check the area and PIN code." : ""} You'll move the pin onto your door next.`
                 : "Best when you're at home. Your location never goes to map search; you'll move the pin onto your door next."}
             </p>
-            {locateError && (
-              <p className="mt-2 text-xs font-medium text-[#8A2522]">
-                {locateError}
-              </p>
-            )}
+            {locateError && <p className="mt-2 text-xs font-medium text-[#8A2522]">{locateError}</p>}
           </section>
 
           {/* Typed address fields */}
           <section className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-4 shadow-sm">
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label
-                  htmlFor="area-input"
-                  className="block text-xs font-semibold text-[#4A433B]"
-                >
+                <label htmlFor="area-input" className="block text-xs font-semibold text-[#4A433B]">
                   Area / Locality
                 </label>
                 <input
@@ -466,10 +422,7 @@ export default function SetupPage() {
                 />
               </div>
               <div>
-                <label
-                  htmlFor="pincode-input"
-                  className="block text-xs font-semibold text-[#4A433B]"
-                >
+                <label htmlFor="pincode-input" className="block text-xs font-semibold text-[#4A433B]">
                   PIN code
                 </label>
                 <input
@@ -488,12 +441,8 @@ export default function SetupPage() {
               </div>
             </div>
 
-            <label
-              htmlFor="landmark-input"
-              className="mt-3 block text-xs font-semibold text-[#4A433B]"
-            >
-              Nearby landmark{" "}
-              <span className="font-normal text-[#8C8275]">(optional)</span>
+            <label htmlFor="landmark-input" className="mt-3 block text-xs font-semibold text-[#4A433B]">
+              Nearby landmark <span className="font-normal text-[#8C8275]">(optional)</span>
             </label>
             <input
               id="landmark-input"
@@ -505,10 +454,7 @@ export default function SetupPage() {
               className="mt-1 w-full rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-3 py-2 text-sm text-[#1F1C18] placeholder-[#8C8275] focus:border-[#046A38] focus:outline-none"
             />
 
-            <label
-              htmlFor="way-textarea"
-              className="mt-3 block text-xs font-semibold text-[#4A433B]"
-            >
+            <label htmlFor="way-textarea" className="mt-3 block text-xs font-semibold text-[#4A433B]">
               How to find your door
             </label>
             <textarea
@@ -522,18 +468,12 @@ export default function SetupPage() {
             />
 
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-medium text-[#6E655A]">
-                Add quickly:
-              </span>
+              <span className="text-[11px] font-medium text-[#6E655A]">Add quickly:</span>
               {QUICK_CHIPS.map((chip) => (
                 <button
                   key={chip}
                   type="button"
-                  onClick={() =>
-                    setTypedWay((prev) =>
-                      prev.trim() ? `${prev.trim()}, ${chip}` : chip,
-                    )
-                  }
+                  onClick={() => setTypedWay((prev) => (prev.trim() ? `${prev.trim()}, ${chip}` : chip))}
                   className="rounded-full border border-[#E6DAC6] bg-[#FAF5EC] px-2.5 py-1 text-[11px] font-medium text-[#4A433B] transition hover:border-[#B8862D]"
                 >
                   + {chip}
@@ -550,9 +490,7 @@ export default function SetupPage() {
                   🔒
                 </span>
                 <div>
-                  <h2 className="text-sm font-bold text-[#FFFDF9]">
-                    Room or flat number
-                  </h2>
+                  <h2 className="text-sm font-bold text-[#FFFDF9]">Room or flat number</h2>
                   <p className="text-[11px] text-[#D2EBD9]">
                     Locked on this device — never sent to any AI or map server
                   </p>
@@ -581,9 +519,7 @@ export default function SetupPage() {
           {/* Error Banner + Retry */}
           {(describeError || pinsError) && (
             <div className="flex flex-col gap-2.5 rounded-xl border border-[#D9534F]/30 bg-[#FDF3F2] p-3.5">
-              <p className="text-xs font-medium text-[#8A2522]">
-                {describeError ?? pinsError}
-              </p>
+              <p className="text-xs font-medium text-[#8A2522]">{describeError ?? pinsError}</p>
               {!describeError && (
                 <button
                   type="button"
@@ -605,7 +541,7 @@ export default function SetupPage() {
           >
             {pinsLoading ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                <MorphLoader />
                 <span>Finding nearby landmarks…</span>
               </>
             ) : (
@@ -637,8 +573,7 @@ export default function SetupPage() {
               Pick & Drag Your Door Pin
             </h1>
             <p className="mt-1 text-sm text-[#6E655A]">
-              Select the closest landmark match or drag the pin to your exact
-              doorstep.
+              Select the closest landmark match or drag the pin to your exact doorstep.
             </p>
           </div>
 
@@ -661,7 +596,7 @@ export default function SetupPage() {
 
       {/* STEP 4 & 5: CONFIRMED DIGIPIN + SPOKEN DIRECTIONS */}
       {screen === "directions" && confirmedPin && (
-        <div className="flex flex-col gap-4">
+        <div className="pata-directions-step">
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
               Step 3 of 4 • Door Code & Audio
@@ -678,8 +613,7 @@ export default function SetupPage() {
               Your Door Code & Directions
             </h1>
             <p className="mt-1 text-sm text-[#6E655A]">
-              Check your 4m × 4m DIGIPIN grid code and listen to the directions
-              couriers will hear.
+              Check your 4m × 4m DIGIPIN grid code and listen to the directions couriers will hear.
             </p>
           </div>
 
@@ -696,9 +630,7 @@ export default function SetupPage() {
 
             <div className="mt-3 flex items-center justify-between rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] px-4 py-3">
               <div>
-                <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
-                  Door Code
-                </p>
+                <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">Door Code</p>
                 <p className="mt-0.5 font-mono text-xl font-bold tracking-wider text-[#1F1C18]">
                   {formattedDigipin}
                 </p>
@@ -727,21 +659,17 @@ export default function SetupPage() {
 
             {directionsLoading && (
               <div className="mt-3 flex items-center gap-3 rounded-xl bg-[#FAF5EC] p-4 text-sm text-[#1F1C18]">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#B8862D] border-t-transparent" />
+                <MorphLoader size={24} color="#B8862D" />
                 <span>Writing directions in Hindi, Marathi and English…</span>
               </div>
             )}
 
             {directionsError && (
               <div className="mt-3 flex flex-col gap-2.5 rounded-xl border border-[#D9534F]/30 bg-[#FDF3F2] p-3.5">
-                <p className="text-xs font-medium text-[#8A2522]">
-                  {directionsError}
-                </p>
+                <p className="text-xs font-medium text-[#8A2522]">{directionsError}</p>
                 <button
                   type="button"
-                  onClick={() =>
-                    void runMakeDirections(confirmedPin, chosenCandidate)
-                  }
+                  onClick={() => void runMakeDirections(confirmedPin, chosenCandidate)}
                   className="self-start rounded-lg bg-[#046A38] px-3 py-1.5 text-xs font-semibold text-[#FFFDF9]"
                 >
                   Retry Directions
@@ -767,9 +695,7 @@ export default function SetupPage() {
                           {lang.label} ({lang.sub})
                         </span>
                       </div>
-                      <p className="mt-1 text-xs leading-relaxed text-[#4A433B]">
-                        {directions[lang.code]}
-                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-[#4A433B]">{directions[lang.code]}</p>
                     </div>
                   </div>
                 ))}
@@ -804,18 +730,14 @@ export default function SetupPage() {
             <span className="inline-flex items-center rounded-full bg-[#E3F2E8] px-3 py-1 text-[11px] font-semibold tracking-wider text-[#046A38] uppercase">
               Step 4 of 4 • Home Name
             </span>
-            <span className="font-mono text-xs font-semibold text-[#046A38]">
-              {formattedDigipin}
-            </span>
+            <span className="font-mono text-xs font-semibold text-[#046A38]">{formattedDigipin}</span>
           </div>
 
           <div>
             <h1 className="font-serif text-2xl font-bold tracking-tight text-[#1F1C18]">
               Choose Your Home&apos;s Name
             </h1>
-            <p className="mt-1 text-sm text-[#6E655A]">
-              A memorable name for deliveries and friends.
-            </p>
+            <p className="mt-1 text-sm text-[#6E655A]">A memorable name for deliveries and friends.</p>
           </div>
 
           {/* Name Input Card */}
@@ -864,22 +786,19 @@ export default function SetupPage() {
                 placeholder="blue-gate"
                 className="min-w-0 flex-1 bg-transparent font-mono text-sm font-bold text-[#1F1C18] focus:outline-none"
               />
-              <span className="font-mono text-xs text-[#6E655A]">
-                .{PROVIDER_NAME}
-              </span>
+              <span className="font-mono text-xs text-[#6E655A]">.{PROVIDER_NAME}</span>
             </div>
 
             {/* Validation + Availability status */}
             <div className="mt-2.5 flex items-center justify-between text-xs">
-              <span className="text-[#6E655A]">
-                3–32 lowercase letters, numbers, or single hyphens
-              </span>
+              <span className="text-[#6E655A]">3–32 lowercase letters, numbers, or single hyphens</span>
               {!isLabelValid || availabilityStatus === "invalid" ? (
-                <span className="font-semibold text-[#8A2522]">
-                  Invalid format
-                </span>
+                <span className="font-semibold text-[#8A2522]">Invalid format</span>
               ) : availabilityStatus === "checking" ? (
-                <span className="font-medium text-[#8A5F14]">Checking…</span>
+                <span className="inline-flex items-center gap-2 font-medium text-[#8A5F14]">
+                  <MorphLoader size={18} />
+                  Checking…
+                </span>
               ) : availabilityStatus === "available" ? (
                 <span className="rounded-full bg-[#E3F2E8] px-2.5 py-0.5 font-semibold text-[#046A38]">
                   ✓ Available
@@ -907,16 +826,14 @@ export default function SetupPage() {
                 🛡️
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[#1F1C18]">
-                  Public Name, Private Door
-                </h2>
+                <h2 className="text-sm font-bold text-[#1F1C18]">Public Name, Private Door</h2>
                 <p className="mt-1 text-xs leading-relaxed text-[#4A433B]">
                   Names and your locality (
                   <span className="font-mono font-semibold">
                     {locality.name}, {locality.pinCode}
                   </span>
-                  ) are public. Your exact door, room number, and voice
-                  directions stay locked until you share a temporary link.
+                  ) are public. Your exact door, room number, and voice directions stay locked until you share
+                  a temporary link.
                 </p>
               </div>
             </div>
@@ -947,9 +864,7 @@ export default function SetupPage() {
                   {isReservingDone ? "✓" : "1"}
                 </span>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-[#1F1C18]">
-                    Reserving your name…
-                  </p>
+                  <p className="text-sm font-semibold text-[#1F1C18]">Reserving your name…</p>
                 </div>
               </div>
 
@@ -966,9 +881,7 @@ export default function SetupPage() {
                   {isSavingDone ? "✓" : "2"}
                 </span>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-[#1F1C18]">
-                    Saving your home, locked…
-                  </p>
+                  <p className="text-sm font-semibold text-[#1F1C18]">Saving your home, locked…</p>
                 </div>
               </div>
             </div>
@@ -992,15 +905,14 @@ export default function SetupPage() {
             disabled={
               creating ||
               !isLabelValid ||
-              (!setupStarted &&
-                (availabilityStatus === "taken" || availabilityStatus === "checking"))
+              (!setupStarted && (availabilityStatus === "taken" || availabilityStatus === "checking"))
             }
             onClick={() => void handleCreateHousehold()}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#046A38] px-4 py-3.5 text-sm font-semibold text-[#FFFDF9] shadow-sm transition hover:bg-[#03562D] disabled:opacity-50"
           >
             {creating ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                <MorphLoader />
                 <span>Saving your home…</span>
               </>
             ) : (

@@ -6,6 +6,7 @@
 // Approve → share sheet (navigator.share) + QR code (components/QrCode) of the courier link.
 // The stage grant is 20 seconds.
 import { useEffect, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import QrCode from "../../components/QrCode";
 import { fromBase64Url, toBase64Url } from "../../lib/link";
 import { ARKIV_MAX_DAYS, GRANT_LATENCY_MARGIN_SECONDS } from "../../../shared/constants";
@@ -59,21 +60,12 @@ export function parseGrantRequestFragment(hash: string): GrantRequest | null {
     }
 
     const obj = parsed as Record<string, unknown>;
-    const allowedTopKeys = new Set([
-      "requester",
-      "purpose",
-      "language",
-      "durationSeconds",
-    ]);
+    const allowedTopKeys = new Set(["requester", "purpose", "language", "durationSeconds"]);
     for (const k of Object.keys(obj)) {
       if (!allowedTopKeys.has(k)) return null;
     }
 
-    if (
-      !obj.requester ||
-      typeof obj.requester !== "object" ||
-      Array.isArray(obj.requester)
-    ) {
+    if (!obj.requester || typeof obj.requester !== "object" || Array.isArray(obj.requester)) {
       return null;
     }
 
@@ -92,30 +84,20 @@ export function parseGrantRequestFragment(hash: string): GrantRequest | null {
 
     if (
       reqObj.ensName !== undefined &&
-      (typeof reqObj.ensName !== "string" ||
-        !reqObj.ensName.trim() ||
-        reqObj.ensName.trim().length > 120)
+      (typeof reqObj.ensName !== "string" || !reqObj.ensName.trim() || reqObj.ensName.trim().length > 120)
     ) {
       return null;
     }
 
-    if (
-      typeof obj.purpose !== "string" ||
-      !obj.purpose.trim() ||
-      obj.purpose.trim().length > 200
-    ) {
+    if (typeof obj.purpose !== "string" || !obj.purpose.trim() || obj.purpose.trim().length > 200) {
       return null;
     }
 
-    if (
-      typeof obj.language !== "string" ||
-      !LANGUAGES.includes(obj.language as Language)
-    ) {
+    if (typeof obj.language !== "string" || !LANGUAGES.includes(obj.language as Language)) {
       return null;
     }
 
-    const maxDuration =
-      ARKIV_MAX_DAYS * 86_400 - GRANT_LATENCY_MARGIN_SECONDS;
+    const maxDuration = ARKIV_MAX_DAYS * 86_400 - GRANT_LATENCY_MARGIN_SECONDS;
     if (
       typeof obj.durationSeconds !== "number" ||
       !Number.isSafeInteger(obj.durationSeconds) ||
@@ -242,10 +224,8 @@ export default function ApprovePage() {
       active = false;
     };
   }, [ensName, checkAttempt]);
-  const requesterResult =
-    ensName && requesterCheck?.forName === ensName ? requesterCheck.result : null;
-  const handOffEndpoint =
-    requesterResult?.state === "verified" ? requesterResult.endpoint : null;
+  const requesterResult = ensName && requesterCheck?.forName === ensName ? requesterCheck.result : null;
+  const handOffEndpoint = requesterResult?.state === "verified" ? requesterResult.endpoint : null;
 
   const handleHandOff = () => {
     if (!approved || !handOffEndpoint) return;
@@ -286,9 +266,7 @@ export default function ApprovePage() {
       const result = await approveGrant(keys, household, request);
       setApproved(result);
     } catch {
-      setApproveError(
-        "Could not create the courier link right now. Please tap Retry.",
-      );
+      setApproveError("Could not create the courier link right now. Please tap Retry.");
     } finally {
       setApproving(false);
     }
@@ -323,9 +301,7 @@ export default function ApprovePage() {
           {approved ? "Courier Link Ready" : "Door Access Consent"}
         </span>
         <h1 className="mt-1 font-serif text-2xl font-bold tracking-tight text-[#1F1C18]">
-          {approved
-            ? "Share Courier Link"
-            : "Someone is asking for your address"}
+          {approved ? "Share Courier Link" : "Someone is asking for your address"}
         </h1>
         <p className="text-sm text-[#6E655A]">
           {approved
@@ -367,16 +343,11 @@ export default function ApprovePage() {
 
       {/* Malformed #fragment warning */}
       {rawHashPresent && malformedHash && (
-        <section
-          role="alert"
-          className="rounded-2xl border border-[#D9534F]/40 bg-[#FDF3F2] p-4 shadow-xs"
-        >
-          <h2 className="text-sm font-bold text-[#8A2522]">
-            This address request is invalid
-          </h2>
+        <section role="alert" className="rounded-2xl border border-[#D9534F]/40 bg-[#FDF3F2] p-4 shadow-xs">
+          <h2 className="text-sm font-bold text-[#8A2522]">This address request is invalid</h2>
           <p className="mt-1 text-xs leading-relaxed text-[#6E2A27]">
-            The request link is missing required details or was corrupted. You
-            can make a fresh test request below.
+            The request link is missing required details or was corrupted. You can make a fresh test request
+            below.
           </p>
         </section>
       )}
@@ -394,9 +365,7 @@ export default function ApprovePage() {
                 <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
                   Your Home&apos;s Name
                 </p>
-                <p className="font-mono text-sm font-bold text-[#1F1C18]">
-                  {household?.name ?? "—"}
-                </p>
+                <p className="font-mono text-sm font-bold text-[#1F1C18]">{household?.name ?? "—"}</p>
               </div>
             </div>
             <span className="rounded-full bg-[#E3F2E8] px-2.5 py-1 text-[10px] font-bold tracking-wider text-[#046A38] uppercase">
@@ -410,38 +379,26 @@ export default function ApprovePage() {
               <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
                 Who Is Asking
               </p>
-              <p className="mt-1 text-sm font-bold text-[#1F1C18]">
-                {request.requester.displayName}
-              </p>
+              <p className="mt-1 text-sm font-bold text-[#1F1C18]">{request.requester.displayName}</p>
               {request.requester.ensName && (
-                <p className="mt-0.5 font-mono text-[11px] text-[#046A38]">
-                  {request.requester.ensName}
-                </p>
+                <p className="mt-0.5 font-mono text-[11px] text-[#046A38]">{request.requester.ensName}</p>
               )}
             </div>
 
             <div className="rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3">
-              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
-                Purpose
-              </p>
-              <p className="mt-1 text-sm font-bold text-[#1F1C18]">
-                {request.purpose}
-              </p>
+              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">Purpose</p>
+              <p className="mt-1 text-sm font-bold text-[#1F1C18]">{request.purpose}</p>
             </div>
 
             <div className="rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3">
               <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
                 Courier&apos;s Language
               </p>
-              <p className="mt-1 text-sm font-bold text-[#1F1C18]">
-                {LANGUAGE_NAME[request.language]}
-              </p>
+              <p className="mt-1 text-sm font-bold text-[#1F1C18]">{LANGUAGE_NAME[request.language]}</p>
             </div>
 
             <div className="rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3">
-              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
-                Duration
-              </p>
+              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">Duration</p>
               <p className="mt-1 text-sm font-bold text-[#B8862D]">
                 {formatDurationInWords(request.durationSeconds)}
               </p>
@@ -451,12 +408,15 @@ export default function ApprovePage() {
           {/* P1-5: who is asking, as its own public name describes it */}
           {ensName && !requesterResult && (
             <div className="flex items-center gap-2.5 rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3 text-xs text-[#6E655A]">
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+              <MorphLoader size={18} color="#046A38" />
               <span>Checking {ensName}…</span>
             </div>
           )}
           {requesterResult?.state === "verified" && (
-            <div data-testid="requester-verified" className="rounded-xl border border-[#046A38]/40 bg-[#E3F2E8] p-3.5">
+            <div
+              data-testid="requester-verified"
+              className="rounded-xl border border-[#046A38]/40 bg-[#E3F2E8] p-3.5"
+            >
               <p className="text-[10px] font-bold tracking-wider text-[#046A38] uppercase">
                 ✓ Checked on its public name
               </p>
@@ -474,8 +434,8 @@ export default function ApprovePage() {
                 {requesterResult.ensName} doesn&apos;t say who it is
               </p>
               <p className="mt-1 text-xs leading-relaxed text-[#7A5615]">
-                Its public name has no description, so anyone could have sent this. Only approve if
-                you know who is asking.
+                Its public name has no description, so anyone could have sent this. Only approve if you know
+                who is asking.
               </p>
             </div>
           )}
@@ -514,9 +474,7 @@ export default function ApprovePage() {
 
           {approveError && (
             <div className="flex flex-col gap-2 rounded-xl border border-[#D9534F]/30 bg-[#FDF3F2] p-3.5">
-              <p className="text-xs font-medium text-[#8A2522]">
-                {approveError}
-              </p>
+              <p className="text-xs font-medium text-[#8A2522]">{approveError}</p>
               <button
                 type="button"
                 onClick={() => void handleApprove()}
@@ -535,7 +493,7 @@ export default function ApprovePage() {
           >
             {approving ? (
               <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FFFDF9] border-t-transparent" />
+                <MorphLoader />
                 <span>Creating temporary link…</span>
               </>
             ) : (
@@ -553,25 +511,17 @@ export default function ApprovePage() {
         <section className="flex flex-col gap-4 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 shadow-sm">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3">
-              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
-                Shared With
-              </p>
-              <p className="mt-0.5 text-sm font-bold text-[#1F1C18]">
-                {request.requester.displayName}
-              </p>
+              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">Shared With</p>
+              <p className="mt-0.5 text-sm font-bold text-[#1F1C18]">{request.requester.displayName}</p>
               <p className="text-xs text-[#6E655A]">{request.purpose}</p>
             </div>
 
             <div className="rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3">
-              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
-                Valid For
-              </p>
+              <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">Valid For</p>
               <p className="mt-0.5 text-sm font-bold text-[#B8862D]">
                 {formatDurationInWords(request.durationSeconds)}
               </p>
-              <p className="text-xs text-[#6E655A]">
-                {LANGUAGE_NAME[request.language]}
-              </p>
+              <p className="text-xs text-[#6E655A]">{LANGUAGE_NAME[request.language]}</p>
             </div>
           </div>
 
@@ -585,12 +535,8 @@ export default function ApprovePage() {
 
           {/* Courier Link Box */}
           <div className="rounded-xl border border-[#E6DAC6] bg-[#FAF5EC] p-3">
-            <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">
-              Courier Link
-            </p>
-            <p className="mt-1 break-all font-mono text-xs text-[#1F1C18]">
-              {approved.courierLink}
-            </p>
+            <p className="text-[10px] font-semibold tracking-wider text-[#6E655A] uppercase">Courier Link</p>
+            <p className="mt-1 break-all font-mono text-xs text-[#1F1C18]">{approved.courierLink}</p>
           </div>
 
           {/* Prominent Bearer Warning */}
@@ -641,27 +587,18 @@ export default function ApprovePage() {
       {/* "Make a test request" Builder Form */}
       <section className="rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="font-serif text-base font-bold text-[#1F1C18]">
-            Make a test request
-          </h2>
+          <h2 className="font-serif text-base font-bold text-[#1F1C18]">Make a test request</h2>
           <span className="rounded-md bg-[#F2ECE1] px-2 py-0.5 text-[10px] font-semibold text-[#6E655A] uppercase">
             Builds #fragment
           </span>
         </div>
         <p className="mt-1 text-xs text-[#6E655A]">
-          Type a requester and purpose below to build a request fragment in the
-          address bar.
+          Type a requester and purpose below to build a request fragment in the address bar.
         </p>
 
-        <form
-          onSubmit={handleBuildTestRequest}
-          className="mt-3.5 flex flex-col gap-3"
-        >
+        <form onSubmit={handleBuildTestRequest} className="mt-3.5 flex flex-col gap-3">
           <div>
-            <label
-              htmlFor="test-requester"
-              className="block text-xs font-semibold text-[#4A433B]"
-            >
+            <label htmlFor="test-requester" className="block text-xs font-semibold text-[#4A433B]">
               Requester name
             </label>
             <input
@@ -675,10 +612,7 @@ export default function ApprovePage() {
           </div>
 
           <div>
-            <label
-              htmlFor="test-purpose"
-              className="block text-xs font-semibold text-[#4A433B]"
-            >
+            <label htmlFor="test-purpose" className="block text-xs font-semibold text-[#4A433B]">
               Purpose
             </label>
             <input
@@ -693,10 +627,7 @@ export default function ApprovePage() {
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label
-                htmlFor="test-language"
-                className="block text-xs font-semibold text-[#4A433B]"
-              >
+              <label htmlFor="test-language" className="block text-xs font-semibold text-[#4A433B]">
                 Courier&apos;s language
               </label>
               <select
@@ -712,10 +643,7 @@ export default function ApprovePage() {
             </div>
 
             <div>
-              <label
-                htmlFor="test-duration"
-                className="block text-xs font-semibold text-[#4A433B]"
-              >
+              <label htmlFor="test-duration" className="block text-xs font-semibold text-[#4A433B]">
                 Duration
               </label>
               <select

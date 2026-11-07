@@ -2,6 +2,7 @@
 // History (P1-2). Owner: frontend. Logic: src/lib/flows/history.ts.
 // One row per grant this household issued, newest first: who, why, when, and how it ended.
 import { useCallback, useEffect, useState } from "react";
+import MorphLoader from "../../components/MorphLoader";
 import Link from "next/link";
 import type { HouseholdKeys } from "../../lib/keys";
 import { signIn } from "../../lib/flows/setup-household";
@@ -122,7 +123,7 @@ export default function HistoryPage() {
 
       {loading && records === null && (
         <section className="flex items-center gap-3 rounded-2xl border border-[#E6DAC6] bg-[#FFFDF9] p-5 text-sm text-[#1F1C18] shadow-xs">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#046A38] border-t-transparent" />
+          <MorphLoader size={24} color="#046A38" />
           <span>Reading your history…</span>
         </section>
       )}

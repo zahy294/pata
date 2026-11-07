@@ -1,0 +1,18 @@
+.pata-page-transition {
+  position: relative;
+  min-width: 0;
+}
+
+.pata-page-transition__edge {
+  position: absolute;
+  top: 0;
+  left: -12px;
+  width: 3px;
+  height: 120px;
+  border-right: 1px solid #e4c07a;
+  border-radius: 2px;
+  background: #046a38;
+  opacity: 0;
+  transform-origin: top;
+  pointer-events: none;
+}

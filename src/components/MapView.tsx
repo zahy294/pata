@@ -5,16 +5,18 @@
 // for the style, calls setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url)),
 // starts at DEMO_BBOX's centre (no clamp: the tiles are worldwide) and shows ATTRIBUTION (src/lib/map/config.ts).
 import dynamic from "next/dynamic";
+import MorphLoader from "./MorphLoader";
 import type { MapViewProps } from "./MapViewInner";
 
 const MapViewInner = dynamic(() => import("./MapViewInner"), {
   ssr: false,
   loading: () => (
     <div
-      className="flex h-96 w-full items-center justify-center rounded-xl bg-neutral-100 text-sm text-neutral-400"
+      className="flex h-96 w-full items-center justify-center gap-3 rounded-xl bg-neutral-100 text-sm text-neutral-400"
       aria-label="Loading map…"
     >
-      Loading map…
+      <MorphLoader size={28} color="#046A38" />
+      <span>Loading map…</span>
     </div>
   ),
 });
