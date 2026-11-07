@@ -6,10 +6,30 @@ Couriers and apps get an expiring, revocable link to the exact door: pin, DIGIPI
 
 Built at ETHGlobal Mumbai (Classic track, Nov 5–7, 2026).
 
+**An address becomes a permission you grant, not text you hand out:** to one requester, for a set time, revocable, and checked without us.
+
+## For judges
+
+- **ENS, Best Use of ENSv2:**
+  - Pata's own emancipated `UserRegistry`, with per-household resolvers and grant registries from the factory.
+  - Expiring, revocable subnames as consent.
+  - ENSIP-26 records on requester names.
+- **Ethereum Foundation, Anon-RPC / CROPS:** every read the app makes, on both phones and both chains, goes through one Nox worker. The exceptions are listed under [Anon-RPC coverage](#anon-rpc-coverage).
+- **Arkiv:** every exact record is a sealed entity owned by the household. Payloads expire with their grant, and owner queries build the live-access list and history.
+
+Where the reasoning lives:
+
+- [docs/team/pitch.md](docs/team/pitch.md): the three claims, the demo order, and the evidence for each track.
+- [docs/adr/](docs/adr/): the 13 decisions.
+- [docs/plans/](docs/plans/): one plan per ticket.
+- [GLOSSARY.md](GLOSSARY.md): the domain terms.
+
 ## Try it
 
 - **App:** https://pata.pata-ggr.workers.dev (built for phones; use mobile data, see [Known limitations](#known-limitations))
 - **Server:** https://pata-server.pata-ggr.workers.dev (`/health`)
+
+The app opens on the Pata intro; tap **Enter Pata**.
 
 1. **Set up a home:** `/setup`. Tap **Use my current location**, or type a nearby landmark. In Mumbai, the location fills in the area and PIN code on the phone; check them, then type how to find your door. Type the room number separately; it never leaves the phone unencrypted. Move the pin onto your door on the map, check the directions in three languages, choose a name, then save (about 2 minutes).
 2. **Share the door with a shop:** open `/seller`, a labelled mock shop. Once per phone, type a shop name and tap **Create the shop's name**: it gets its own ENS name with ENSIP-26 records (about a minute). Then tap **Confirm address with Pata**. The consent screen shows what the shop's own name says about it; approve, then **Send link to …** hands the link to the shop's page, where **Prove we hold it** checks the grant against ENS. (Or, from home → **Share a courier link**, make a test request by hand.)
@@ -37,6 +57,7 @@ courier phone ──Anon-RPC (Nox mixnet)──▶ ENS liveness check ──▶ 
 | **Address AI**        | The household types the area, PIN code, a nearby landmark and how to find the door, or the phone's location places the pin ([ADR 0011](docs/adr/0011-setup-takes-a-typed-address-and-the-phone-location.md)). Without a location, **Sonnet 5.5** picks landmark pins only from real OpenStreetMap features (Nominatim and Overpass). Sonnet writes the directions in three languages. Plain, tested code places the pins and computes the DIGIPIN; the model only proposes. |
 | **Speech**            | Setup records nothing and makes no Sarvam calls. The phone's own voice (`speechSynthesis`) reads the directions aloud, on setup and on the courier's page. Setup no longer makes Sarvam clips: a third ~100 KB clip write stalled setup on a phone ([ADR 0010](docs/adr/0010-setup-makes-no-voice-clips.md)).                                                                                                                                                               |
 | **Courier check**     | The courier page shows the door only if the grant is live in the household's ENS registry, its owner matches the key in the link, and the payload's Arkiv owner is the household. It checks again every few seconds and ends as soon as the registry says so. A failed read never counts as expired.                                                                                                                                                                        |
+| **Interface**         | A phone-first PWA. It has a gold pin-and-lock mark, an intro whose wordmark moves into the header, a loader that morphs into a location pin, and page transitions; each one gives way to reduced motion and never blocks a courier link ([intro](docs/plans/P1-intro.md), [loader](docs/plans/P1-loader.md), [transitions](docs/plans/P1-page-transitions.md)).                                                                                                             |
 | **Worker**            | One Cloudflare Worker holds the Claude, Sarvam and relay keys, checks household signatures, enforces a daily spend cap and kill switch, funds new households with test gas, and registers names. It runs in a US region (placement hint), because Anthropic refuses calls from some Cloudflare locations.                                                                                                                                                                   |
 
 ## CROPS
@@ -54,17 +75,17 @@ courier phone ──Anon-RPC (Nox mixnet)──▶ ENS liveness check ──▶ 
 
 ## Real vs mocked
 
-| Part                                           | Status                                                                                                                                         |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Names, resolvers, grant registries             | **Real**, ENSv2 on Sepolia, created by the app (factory deploys from the household's own account)                                              |
-| Grants: mint, expiry, liveness check           | **Real**, on chain; shown end to end on phones, including the 20 s stage grant ending by itself                                                |
-| Revocation and live access                     | **Real**: the list stops a grant on tap and empties by itself on expiry ([P1-2](docs/plans/P1-2.md))                                           |
-| Encrypted home, voice, payload, audio, history | **Real**, Arkiv Rabdi                                                                                                                          |
-| Landmark ranking, directions                   | **Real** Claude calls through the Worker                                                                                                       |
-| Map                                            | **Real** OpenStreetMap data; landmark search falls back to a hand-dropped pin when Overpass refuses                                            |
-| Gas                                            | The Worker's relay tops up each household with Sepolia ETH and Rabdi tGLM                                                                      |
-| Seller and its request                         | A labelled mock shop (`/seller`) with a **real** ENS name and records, made in the app ([P1-5](docs/plans/P1-5.md))                            |
-| Passkeys                                       | Not yet: a device-stored key (P1-3)                                                                                                            |
+| Part                                           | Status                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Names, resolvers, grant registries             | **Real**, ENSv2 on Sepolia, created by the app (factory deploys from the household's own account)                   |
+| Grants: mint, expiry, liveness check           | **Real**, on chain; shown end to end on phones, including the 20 s stage grant ending by itself                     |
+| Revocation and live access                     | **Real**: the list stops a grant on tap and empties by itself on expiry ([P1-2](docs/plans/P1-2.md))                |
+| Encrypted home, voice, payload, audio, history | **Real**, Arkiv Rabdi                                                                                               |
+| Landmark ranking, directions                   | **Real** Claude calls through the Worker                                                                            |
+| Map                                            | **Real** OpenStreetMap data; landmark search falls back to a hand-dropped pin when Overpass refuses                 |
+| Gas                                            | The Worker's relay tops up each household with Sepolia ETH and Rabdi tGLM                                           |
+| Seller and its request                         | A labelled mock shop (`/seller`) with a **real** ENS name and records, made in the app ([P1-5](docs/plans/P1-5.md)) |
+| Passkeys                                       | Not yet: a device-stored key (P1-3)                                                                                 |
 
 ## Anon-RPC coverage
 
@@ -120,10 +141,10 @@ Arkiv write-ups: [why Arkiv](arkiv/why-arkiv.md), [how we use it](arkiv/how-you-
 
 ETHGlobal asks which parts AI wrote. Commits where an agent wrote code end with `AI: Codex` or `AI: Claude Code`. List them with `git log --grep "AI:"`; on 2026-11-06 alone, over 120 commits carry `AI: Codex` and over 50 carry `AI: Claude Code`. Commits from before about 04:00 IST on 2026-11-06 may lack the trailer; the table below covers them.
 
-| Tool                        | What it wrote                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Codex** (each teammate's) | Most ticket code: keys, sealing and Nox RPC (`src/lib/{keys,seal,rpc}`); DIGIPIN and geometry; ENS and Arkiv modules, setup, grant, courier and revoke flows (`src/lib/{ens,arkiv,flows}`); the address AI, speech and map routes (`server/src/{ai,speech,geo,routes}`); the Worker guard and relay; the screens and components (`src/app`, `src/components`); `src/lib/link`; and the tests and plan files for each.                                                                                                                                                                                                                                                                                                  |
-| **Claude Code**             | **Before kick-off:** planning and research (`idea.md`, `research.md`, `docs/research/*`, ADRs 0001–0008, `GLOSSARY.md`, `docs/plan.md`, `docs/tickets.md`).<br>**P0-1:** the scaffold and interfaces (`shared/`, module stubs, the check gate, `AGENTS.md`, `docs/team/*`); the owner scripts in `scripts/`.<br>**Reviews:** reviews and merges of every branch.<br>**Fixes from the phone runs on 2026-11-06:** AAC audio and the grant audio entity (ADR 0009); the screens' switch from fake to real flows; deploy nonces; Arkiv gas; model retries, the Sonnet fallback and failure-category logs; the Worker's US placement; the PIN-code locality fallback; tap-to-place pins; courier polling; and this README.<br>**P1 on 2026-11-07:** Nox read retries and warm-up; the live-access and history screens (P1-2); requester names, the demo seller, hand-off and grant proof (P1-5); ADR 0013; `docs/team/pitch.md`. |
+| Tool                        | What it wrote                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Codex** (each teammate's) | Most ticket code: keys, sealing and Nox RPC (`src/lib/{keys,seal,rpc}`); DIGIPIN and geometry; ENS and Arkiv modules, setup, grant, courier and revoke flows (`src/lib/{ens,arkiv,flows}`); the address AI, speech and map routes (`server/src/{ai,speech,geo,routes}`); the Worker guard and relay; the screens and components (`src/app`, `src/components`); `src/lib/link`; and the tests and plan files for each. **P1 design on 2026-11-07:** the brand mark and app icons, the intro, the morphing loader, page transitions and responsive layout (`src/components/{HomeIntro,MorphLoader,PageTransition}.*`, `public/`), their Playwright tests (`e2e/{intro,loader,page-transitions}.spec.ts`), research notes and plans.                                                                                                                                                                                                                                                                         |
+| **Claude Code**             | **Before kick-off:** planning and research (`idea.md`, `research.md`, `docs/research/*`, ADRs 0001–0008, `GLOSSARY.md`, `docs/plan.md`, `docs/tickets.md`).<br>**P0-1:** the scaffold and interfaces (`shared/`, module stubs, the check gate, `AGENTS.md`, `docs/team/*`); the owner scripts in `scripts/`.<br>**Reviews:** reviews and merges of every branch.<br>**Fixes from the phone runs on 2026-11-06:** AAC audio and the grant audio entity (ADR 0009); the screens' switch from fake to real flows; deploy nonces; Arkiv gas; model retries, the Sonnet fallback and failure-category logs; the Worker's US placement; the PIN-code locality fallback; tap-to-place pins; courier polling; and this README.<br>**P1 on 2026-11-07:** Nox read retries and warm-up; the live-access and history screens (P1-2); requester names, the demo seller, hand-off and grant proof (P1-5); ADR 0013; `docs/team/pitch.md`; the merge of the design branch into these screens; this README's final pass. |
 
 People set the requirements and made the review decisions. The owner did all account, funding and deploy steps and the parent-name transactions, and ran the phone tests.
 
@@ -145,6 +166,7 @@ Other commands:
 
 - `npm run build` exports the app to `out/`.
 - `npm run e2e` runs Playwright.
+- `npx playwright test -c e2e/intro.playwright.config.ts` runs the intro, loader and transition tests on a phone and a desktop. It needs the dev server on `127.0.0.1`, which the config starts.
 - `node scripts/smoke-worker.mjs` checks a deployed Worker.
 
 ## Licence
